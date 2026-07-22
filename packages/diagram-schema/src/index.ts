@@ -1,0 +1,31 @@
+export {
+  ARCHITECTURE_SCHEMA_VERSION,
+  ArchitectureAssumptionSchema,
+  ArchitectureDocumentSchema,
+  ArchitectureEdgeKindSchema,
+  ArchitectureEdgeModelSchema,
+  ArchitectureGroupModelSchema,
+  ArchitectureMetadataSchema,
+  ArchitectureNodeModelSchema,
+  ArchitectureSourceSchema,
+  createEmptyArchitectureDocument,
+  parseArchitectureDocument,
+  safeParseArchitectureDocument,
+  type ArchitectureAssumption,
+  type ArchitectureDocument,
+  type ArchitectureEdgeKindModel,
+  type ArchitectureEdgeModel,
+  type ArchitectureGroupModel,
+  type ArchitectureMetadata,
+  type ArchitectureNodeModel,
+  type ArchitectureSource,
+  type CreateEmptyDocumentInput,
+} from "./architecture-document";
+export { buildGraphIndex, type GraphIndex } from "./graph-index";
+export {
+  PROJECT_SCHEMA_VERSION,
+  ProjectSchema,
+  parseProject,
+  safeParseProject,
+  type Project,
+} from "./project";

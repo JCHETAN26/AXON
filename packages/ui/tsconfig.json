@@ -1,0 +1,8 @@
+{
+  "extends": "@axon/config/typescript/react-library",
+  "compilerOptions": {
+    "types": ["vitest/globals"]
+  },
+  "include": ["src", "vitest.config.ts", "vitest.setup.ts"],
+  "exclude": ["node_modules"]
+}

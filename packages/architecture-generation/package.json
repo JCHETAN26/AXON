@@ -1,0 +1,25 @@
+{
+  "name": "@axon/architecture-generation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@axon/diagram-schema": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@axon/config": "workspace:*",
+    "eslint": "^9.39.5",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

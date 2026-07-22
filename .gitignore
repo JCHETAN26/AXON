@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+.turbo/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# testing
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# misc
+.DS_Store
+*.pem
+.env
+.env.*
+!.env.example

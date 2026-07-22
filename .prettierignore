@@ -1,0 +1,15 @@
+node_modules
+.next
+.turbo
+coverage
+playwright-report
+test-results
+blob-report
+pnpm-lock.yaml
+next-env.d.ts
+
+# design documentation is preserved exactly as written
+docs
+
+# archived Stitch prototype, reference only
+code.html

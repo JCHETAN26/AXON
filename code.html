@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AXON | Continuous Architecture Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#000000",
+                        "secondary": "#0042c7",
+                        "surface": "#f9f9f9",
+                        "surface-dim": "#dadada",
+                        "surface-variant": "#e2e2e2",
+                        "outline": "#7e7576",
+                        "outline-variant": "#cfc4c5",
+                        "on-surface": "#1a1c1c",
+                        "on-surface-variant": "#4c4546",
+                        "background": "#f9f9f9",
+                        "error": "#ba1a1a",
+                        "success": "#2e7d32",
+                        "dark-bg": "#121212",
+                        "dark-surface": "#1e1e1e",
+                        "dark-border": "#2c2c2c"
+                    },
+                    "fontFamily": {
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "body": ["Space Grotesk", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"],
+                        "label-caps": ["Geist", "sans-serif"]
+                    },
+                    "spacing": {
+                        "canvas-padding": "64px",
+                        "grid-col": "1fr",
+                        "gutter": "1px",
+                        "margin-safe": "40px",
+                        "unit": "8px"
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f9f9f9;
+            background-image: 
+                linear-gradient(to right, #eeeeee 1px, transparent 1px),
+                linear-gradient(to bottom, #eeeeee 1px, transparent 1px);
+            background-size: 40px 40px;
+            scroll-behavior: smooth;
+        }
+
+        .dark body {
+            background-color: #121212;
+            background-image: 
+                linear-gradient(to right, #1e1e1e 1px, transparent 1px),
+                linear-gradient(to bottom, #1e1e1e 1px, transparent 1px);
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+
+        .node-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .5; transform: scale(1.05); }
+        }
+
+        .flow-line {
+            stroke-dasharray: 8;
+            animation: flow 20s linear infinite;
+        }
+        
+        .flow-line.sync { stroke-dasharray: none; }
+        .flow-line.async { stroke-dasharray: 4; }
+        .flow-line.data { stroke-dasharray: 8 2; }
+        .flow-line.telemetry { stroke-dasharray: 2 2; opacity: 0.5; }
+
+        @keyframes flow {
+            from { stroke-dashoffset: 200; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        .finding-reveal { opacity: 0; transform: translateY(10px); transition: all 0.5s ease; pointer-events: none; }
+        .finding-reveal.active { opacity: 1; transform: translateY(0); }
+
+        .service-node {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .metric-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            padding: 1px 4px;
+            background: #000;
+            color: #fff;
+            position: absolute;
+            bottom: -6px;
+            right: 4px;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body class="font-body text-on-surface dark:text-gray-300 antialiased">
+<!-- TOP NAVIGATION -->
+<header class="fixed top-0 left-0 w-full z-50 bg-surface/90 dark:bg-dark-bg/90 backdrop-blur-md border-b border-outline-variant dark:border-dark-border px-8 py-3 flex justify-between items-center">
+<div class="flex items-center gap-10">
+<span class="font-display text-2xl font-bold tracking-tighter text-primary dark:text-white">AXON</span>
+<nav class="hidden lg:flex gap-6 items-center">
+<a class="font-label-caps text-[11px] tracking-widest hover:text-secondary transition-colors" href="#product">PRODUCT</a>
+<a class="font-label-caps text-[11px] tracking-widest hover:text-secondary transition-colors" href="#mcp">MCP</a>
+<a class="font-label-caps text-[11px] tracking-widest hover:text-secondary transition-colors" href="#pricing">PRICING</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-on-surface-variant dark:text-gray-400" id="theme-toggle">contrast</button>
+<a class="font-label-caps text-[11px] tracking-widest hover:text-secondary transition-colors" href="#">SIGN IN</a>
+<button class="bg-primary text-white dark:bg-white dark:text-black px-5 py-2 font-label-caps text-[11px] tracking-widest hover:opacity-80 transition-all">START BUILDING FREE</button>
+</div>
+</header>
+<main class="pt-20">
+<!-- HERO SECTION -->
+<section class="min-h-[90vh] flex flex-col justify-center px-canvas-padding relative overflow-hidden pb-12">
+<div class="max-w-4xl relative z-10 mb-12">
+<h1 class="font-display text-6xl md:text-8xl font-bold leading-[0.85] mb-8 tracking-tighter dark:text-white">
+                Design systems that are <span class="text-secondary">ready</span> for reality.
+            </h1>
+<p class="text-xl text-on-surface-variant dark:text-gray-400 max-w-xl mb-12 font-display">
+                The visual infrastructure map that keeps your engineering team in sync. Audit, simulate, and evolve complex architectures from a single live canvas.
+            </p>
+<div class="flex gap-4">
+<button class="bg-primary dark:bg-white dark:text-black text-white px-10 py-5 font-label-caps text-[12px] tracking-widest hover:-translate-y-0.5 transition-transform">BUILD YOUR FIRST ARCHITECTURE</button>
+<button class="border border-outline-variant dark:border-dark-border px-10 py-5 font-label-caps text-[12px] tracking-widest hover:bg-surface-variant dark:hover:bg-dark-surface transition-colors">VIEW INTERACTIVE DEMO</button>
+</div>
+</div>
+<!-- CONNECTED HERO ARCHITECTURE -->
+<div class="relative w-full aspect-[21/9] border-2 border-primary dark:border-white bg-white dark:bg-dark-surface shadow-[24px_24px_0px_0px_rgba(0,66,199,0.1)] rounded-none overflow-hidden group">
+<div class="absolute top-6 left-6 z-30 flex gap-2 bg-white dark:bg-dark-bg border border-primary dark:border-white p-1">
+<button class="p-2 hover:bg-secondary/10 text-on-surface-variant dark:text-gray-400"><span class="material-symbols-outlined text-[20px]">pan_tool</span></button>
+<button class="p-2 hover:bg-secondary/10 text-on-surface-variant dark:text-gray-400"><span class="material-symbols-outlined text-[20px]">add_box</span></button>
+<div class="w-px bg-outline-variant dark:bg-dark-border mx-1"></div>
+<button class="px-3 font-mono text-[11px] font-bold text-secondary hover:bg-secondary/10" id="hero-audit-trigger">RUN_AUDIT</button>
+</div>
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20 dark:opacity-40" viewbox="0 0 1200 500">
+<!-- Sync Paths -->
+<path class="flow-line sync" d="M150,200 L300,200 M300,200 L450,150 M300,200 L450,250 M300,200 L450,350" fill="none" stroke="currentColor" stroke-width="1"></path>
+<!-- Async Paths -->
+<path class="flow-line async" d="M550,350 L750,350" fill="none" stroke="currentColor" stroke-width="1"></path>
+<!-- Data Paths -->
+<path class="flow-line data" d="M550,150 L750,150 M550,250 L750,250" fill="none" stroke="currentColor" stroke-width="1"></path>
+<!-- Telemetry -->
+<path class="flow-line telemetry" d="M450,250 L1000,350" fill="none" stroke="currentColor" stroke-width="0.5"></path>
+</svg>
+<div class="absolute inset-0 p-12 grid grid-cols-4 gap-8">
+<!-- Column 1: Edge -->
+<div class="flex flex-col justify-center gap-12 items-center">
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[160px]">
+<div class="font-mono text-[9px] text-secondary">EDGE_CDN</div>
+<div class="font-display text-xs font-bold uppercase">Cloudflare</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[160px]">
+<div class="font-mono text-[9px] text-secondary">GATEWAY</div>
+<div class="font-display text-xs font-bold uppercase">API Gateway</div>
+</div>
+</div>
+<!-- Column 2: App -->
+<div class="flex flex-col justify-center gap-8 items-center">
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]" id="node-auth">
+<div class="font-mono text-[9px] text-secondary">AUTH_SVC</div>
+<div class="font-display text-xs font-bold uppercase">Clerk / JWT</div>
+<div class="finding-reveal absolute -right-4 -top-4 bg-error text-white text-[8px] font-mono p-1 shadow-lg" id="finding-auth">SPOF</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]">
+<div class="font-mono text-[9px] text-secondary">APP_MAIN</div>
+<div class="font-display text-xs font-bold uppercase">Go Microservice</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]">
+<div class="font-mono text-[9px] text-secondary">PAYMENTS</div>
+<div class="font-display text-xs font-bold uppercase">Stripe API</div>
+</div>
+</div>
+<!-- Column 3: Data/Broker -->
+<div class="flex flex-col justify-center gap-8 items-center">
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]">
+<div class="font-mono text-[9px] text-secondary">CACHE</div>
+<div class="font-display text-xs font-bold uppercase">Redis Cluster</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]" id="node-db">
+<div class="font-mono text-[9px] text-secondary">PSQL_PRIMARY</div>
+<div class="font-display text-xs font-bold uppercase">PostgreSQL</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]" id="node-mq">
+<div class="font-mono text-[9px] text-secondary">BROKER</div>
+<div class="font-display text-xs font-bold uppercase">RabbitMQ</div>
+<div class="finding-reveal absolute -right-4 -top-4 bg-error text-white text-[8px] font-mono p-1 shadow-lg" id="finding-mq">MISSING_DLQ</div>
+</div>
+</div>
+<!-- Column 4: External/Workers -->
+<div class="flex flex-col justify-center gap-8 items-center">
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]">
+<div class="font-mono text-[9px] text-secondary">WORKERS</div>
+<div class="font-display text-xs font-bold uppercase">Temporal</div>
+</div>
+<div class="service-node p-4 border-2 border-outline bg-white dark:bg-dark-surface w-full max-w-[180px]">
+<div class="font-mono text-[9px] text-secondary">STORAGE</div>
+<div class="font-display text-xs font-bold uppercase">AWS S3</div>
+</div>
+<div class="service-node p-4 border-2 border-secondary bg-secondary/5 dark:bg-secondary/10 w-full max-w-[180px]" id="node-obs">
+<div class="font-mono text-[9px] text-secondary">OBSERVABILITY</div>
+<div class="font-display text-xs font-bold uppercase">Datadog</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- PROMPT TO ARCHITECTURE -->
+<section class="py-24 px-canvas-padding bg-white dark:bg-dark-surface border-y border-outline-variant">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-20 max-w-7xl mx-auto">
+<div class="flex flex-col justify-center">
+<h2 class="font-display text-5xl font-bold mb-8 tracking-tight">Prompt to Production.</h2>
+<div class="bg-surface p-8 border-2 border-primary dark:border-white mb-8">
+<div class="font-mono text-[12px] text-secondary mb-4 uppercase tracking-widest">User_Prompt</div>
+<div class="font-display text-xl leading-relaxed italic">
+                        "Design a multi-tenant SaaS for financial reporting. Requires multi-region support, Stripe integration, and an isolated PostgreSQL schema per tenant. Built on AWS."
+                    </div>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="p-4 border border-outline-variant bg-surface">
+<div class="font-mono text-[9px] text-outline uppercase mb-1">Target_MAU</div>
+<div class="font-bold">250,000+</div>
+</div>
+<div class="p-4 border border-outline-variant bg-surface">
+<div class="font-mono text-[9px] text-outline uppercase mb-1">Isolation</div>
+<div class="font-bold">SCHEMA_LVL</div>
+</div>
+<div class="p-4 border border-outline-variant bg-surface">
+<div class="font-mono text-[9px] text-outline uppercase mb-1">Cloud_Provider</div>
+<div class="font-bold">AWS_EKS</div>
+</div>
+</div>
+</div>
+<div class="relative flex items-center justify-center p-12 border border-outline-variant bg-surface/50">
+<div class="z-10 grid grid-cols-4 gap-2 scale-90 opacity-40">
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-secondary border border-secondary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+<div class="w-16 h-16 bg-white border border-primary"></div>
+</div>
+<div class="absolute inset-0 flex items-center justify-center font-mono text-[11px] text-secondary animate-pulse">MAP_GENERATION_IN_PROGRESS...</div>
+</div>
+</div>
+</section>
+<!-- ARCHITECTURE AUDIT SECTION (NEW) -->
+<section class="py-24 px-canvas-padding bg-surface-container-low dark:bg-dark-bg/50">
+<div class="max-w-7xl mx-auto">
+<h2 class="font-display text-4xl font-bold mb-12">Architecture Audit</h2>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+<div class="lg:col-span-2 space-y-4">
+<div class="flex items-start gap-6 p-6 border-l-4 border-error bg-white dark:bg-dark-surface shadow-sm">
+<span class="material-symbols-outlined text-error mt-1">report_problem</span>
+<div>
+<h3 class="font-bold mb-1">Auth Single Point of Failure (SPOF)</h3>
+<p class="text-sm text-on-surface-variant mb-4">The current Auth service is deployed in a single availability zone. A regional outage would disable all login functions.</p>
+<div class="flex gap-2">
+<span class="bg-error/10 text-error font-mono text-[9px] px-2 py-1 uppercase">Severity: CRITICAL</span>
+<span class="bg-surface-variant font-mono text-[9px] px-2 py-1 uppercase">Confidence: 98%</span>
+</div>
+</div>
+</div>
+<div class="flex items-start gap-6 p-6 border-l-4 border-error bg-white dark:bg-dark-surface shadow-sm">
+<span class="material-symbols-outlined text-error mt-1">settings_backup_restore</span>
+<div>
+<h3 class="font-bold mb-1">Missing Dead-Letter Queue (DLQ)</h3>
+<p class="text-sm text-on-surface-variant mb-4">Broker [RabbitMQ] has no retry/exhaustion policy for the primary ingestion queue. Failed messages are lost.</p>
+<div class="flex gap-2">
+<span class="bg-error/10 text-error font-mono text-[9px] px-2 py-1 uppercase">Severity: HIGH</span>
+<span class="bg-surface-variant font-mono text-[9px] px-2 py-1 uppercase">Confidence: 100%</span>
+</div>
+</div>
+</div>
+<div class="flex items-start gap-6 p-6 border-l-4 border-on-tertiary-container bg-white dark:bg-dark-surface shadow-sm">
+<span class="material-symbols-outlined text-on-tertiary-container mt-1">warning</span>
+<div>
+<h3 class="font-bold mb-1">PostgreSQL Saturation Risk</h3>
+<p class="text-sm text-on-surface-variant mb-4">Projected traffic bursts exceed current m6g.large connection limits by 40%.</p>
+<div class="flex gap-2">
+<span class="bg-on-tertiary-container/10 text-on-tertiary-container font-mono text-[9px] px-2 py-1 uppercase">Severity: MEDIUM</span>
+</div>
+</div>
+</div>
+</div>
+<div class="border-2 border-primary bg-white dark:bg-dark-surface p-8">
+<div class="font-mono text-[10px] text-secondary mb-6 border-b border-outline-variant pb-2 uppercase tracking-tighter">Audit Evidence Panel</div>
+<div class="space-y-6">
+<div>
+<div class="text-[10px] text-outline uppercase mb-1">Evidence List</div>
+<ul class="text-[11px] font-mono space-y-1">
+<li>- cloud_provider_config.yaml:12</li>
+<li>- terraform/auth_cluster.tf: AZ_COUNT=1</li>
+<li>- rabbitmq_topology.json: DLQ=null</li>
+</ul>
+</div>
+<div>
+<div class="text-[10px] text-outline uppercase mb-1">Recommendation</div>
+<p class="text-[11px] leading-relaxed">Enable Multi-AZ deployment for AUTH_SVC and implement RabbitMQ DLQ pattern with backoff. Scaling PSQL to m6g.4xlarge recommended.</p>
+</div>
+<div class="flex flex-col gap-2 pt-4">
+<button class="bg-primary text-white text-[10px] py-3 font-label-caps tracking-widest uppercase hover:opacity-90">Preview Change</button>
+<button class="border border-outline-variant text-[10px] py-3 font-label-caps tracking-widest uppercase hover:bg-surface-variant">View Full Evidence</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- AUDIENCE POSITIONING (NEW) -->
+<section class="py-16 px-canvas-padding text-center border-b border-outline-variant bg-white">
+<div class="max-w-4xl mx-auto">
+<h2 class="font-display text-4xl md:text-5xl font-bold tracking-tight">Built for people responsible for systems—<span class="text-secondary opacity-50 italic">not just diagrams</span>.</h2>
+</div>
+</section>
+<!-- LOCAL MCP WORKFLOW -->
+<section class="py-24 px-canvas-padding bg-surface dark:bg-dark-bg" id="mcp">
+<div class="max-w-5xl mx-auto text-center mb-16">
+<h2 class="font-display text-4xl font-bold mb-6">Local Context, Studio Power.</h2>
+<p class="text-on-surface-variant max-w-2xl mx-auto">Axon speaks MCP. Synchronize your local codebase with our visual studio without exposing secrets.</p>
+</div>
+<div class="flex flex-col md:flex-row items-center justify-between gap-8 max-w-4xl mx-auto">
+<div class="w-full md:w-64 p-8 border-2 border-primary bg-white dark:bg-dark-surface text-center">
+<span class="material-symbols-outlined text-4xl mb-4">terminal</span>
+<div class="font-mono text-xs font-bold uppercase mb-2 tracking-tighter">Local Repo</div>
+<button class="mt-4 text-[9px] font-bold text-secondary uppercase tracking-widest">Run Locally with MCP</button>
+</div>
+<div class="flex-1 h-[2px] bg-primary relative flex items-center justify-center">
+<div class="absolute top-[-24px] font-mono text-[9px] bg-primary text-white px-2 py-1">SECRET_REDACTION</div>
+<div class="w-4 h-4 bg-secondary rounded-full absolute animate-ping"></div>
+</div>
+<div class="w-full md:w-64 p-8 border-2 border-secondary bg-secondary/5 dark:bg-secondary/10 text-center">
+<span class="material-symbols-outlined text-4xl mb-4 text-secondary">cloud_done</span>
+<div class="font-mono text-xs font-bold uppercase mb-2 tracking-tighter text-secondary">Web Studio</div>
+<div class="text-[10px] text-outline">User-Approved Changes Only</div>
+</div>
+</div>
+</section>
+<!-- SIMULATION SECTION -->
+<section class="py-24 px-canvas-padding bg-white dark:bg-dark-surface border-y border-outline-variant">
+<div class="flex flex-col lg:flex-row gap-16 items-start">
+<div class="lg:w-1/3">
+<h2 class="font-display text-5xl font-bold mb-6">Simulate Stress.</h2>
+<p class="text-on-surface-variant dark:text-gray-400 mb-8 font-display">Push your architecture to the breaking point with the full 12-node SaaS topology.</p>
+<div class="bg-surface dark:bg-dark-bg p-8 border-2 border-primary dark:border-white space-y-10">
+<div>
+<div class="flex justify-between font-mono text-[12px] mb-4 font-bold">
+<span>RPS_INTENSITY</span>
+<span class="text-secondary" id="rps-value">1.2k / s</span>
+</div>
+<input class="w-full h-2 bg-outline-variant dark:bg-dark-border appearance-none cursor-pointer accent-secondary" id="rps-slider" max="25000" min="1000" type="range" value="1200"/>
+</div>
+<button class="w-full bg-secondary text-white py-4 font-label-caps text-[12px] tracking-widest hover:brightness-110 transition-all shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]" id="run-simulation">RUN 10X TRAFFIC BURST</button>
+<div class="hidden p-4 border-2 border-error bg-error/5 text-error font-mono text-[11px] font-bold" id="fail-point">
+                        CRITICAL: System failure at 12.4k RPS. Cause: PSQL_PRIMARY Saturation (98%).
+                    </div>
+</div>
+</div>
+<div class="lg:w-2/3 border-2 border-outline-variant aspect-[16/9] w-full relative bg-surface dark:bg-dark-surface p-8 overflow-hidden">
+<div class="absolute inset-0 opacity-10">
+<!-- Faded copy of the 12-node topology for simulation context -->
+<div class="grid grid-cols-4 h-full p-8 gap-4 grayscale">
+<div class="flex flex-col justify-around"><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div></div>
+<div class="flex flex-col justify-around"><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div></div>
+<div class="flex flex-col justify-around"><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div></div>
+<div class="flex flex-col justify-around"><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div><div class="h-12 border border-outline"></div></div>
+</div>
+</div>
+<div class="relative z-10 h-full flex flex-col justify-center items-center">
+<div class="grid grid-cols-3 gap-12 items-center w-full max-w-2xl">
+<div class="flex flex-col items-center">
+<div class="w-20 h-20 border-2 border-primary flex items-center justify-center font-mono text-[10px] bg-white">GATEWAY</div>
+<div class="font-mono text-[8px] mt-2">TRAFFIC: <span id="sim-traffic-val">1.2k</span></div>
+</div>
+<div class="relative">
+<div class="h-[4px] w-full bg-outline-variant overflow-hidden">
+<div class="h-full bg-secondary transition-all duration-300" id="sim-flow" style="width: 10%"></div>
+</div>
+<div class="absolute top-[-14px] left-1/2 -translate-x-1/2 font-mono text-[8px] bg-white dark:bg-dark-surface px-1" id="q-lag">Q_LAG: 0ms</div>
+</div>
+<div class="w-24 h-24 border-2 border-primary p-3 transition-colors flex flex-col justify-center items-center gap-2 bg-white" id="sim-node-db">
+<div class="font-mono text-[9px] font-bold uppercase">PSQL_PRIMARY</div>
+<div class="w-full h-2 bg-outline-variant overflow-hidden border border-primary">
+<div class="h-full bg-secondary transition-all" id="db-load-fill" style="width: 10%"></div>
+</div>
+<div class="font-mono text-[8px]">SAT: <span id="sat-val">10%</span></div>
+</div>
+</div>
+</div>
+<div class="absolute top-4 left-4 font-mono text-[10px] text-secondary font-bold">SCENARIO: "BLACK_FRIDAY_TRAFFIC_BURST"</div>
+</div>
+</div>
+</section>
+<!-- EVOLUTION DIFF -->
+<section class="py-24 px-canvas-padding border-b border-outline-variant bg-surface dark:bg-dark-bg">
+<div class="text-center max-w-3xl mx-auto mb-16">
+<h2 class="font-display text-5xl font-bold mb-6">Continuous Evolution.</h2>
+<p class="text-on-surface-variant dark:text-gray-400 font-display text-lg">See the difference between your current baseline and the recommended architecture.</p>
+</div>
+<div class="relative w-full border-2 border-primary dark:border-white aspect-[21/9] bg-white overflow-hidden">
+<div class="absolute top-6 left-1/2 -translate-x-1/2 z-20 bg-primary text-white p-1 flex">
+<button class="px-6 py-2 font-label-caps text-[10px] bg-white text-black font-bold" id="diff-current">CURRENT</button>
+<button class="px-6 py-2 font-label-caps text-[10px] hover:bg-white/10" id="diff-reco">RECOMMENDED</button>
+</div>
+<div class="h-full w-full flex items-center justify-center p-12 transition-opacity duration-500" id="view-current">
+<div class="grid grid-cols-4 gap-4 w-full h-full opacity-30 grayscale pointer-events-none">
+<!-- Placeholder for full 12 node current -->
+<div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div>
+<div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div>
+<div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div><div class="border-2 border-dashed border-outline"></div>
+</div>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-mono text-xs uppercase text-outline mb-4">Base Architecture Detected</span>
+<div class="flex gap-8">
+<div class="p-6 border-2 border-outline-variant bg-white font-mono text-[10px]">AUTH_SVC (x1)</div>
+<div class="p-6 border-2 border-outline-variant bg-white font-mono text-[10px]">PSQL_PRIMARY (x1)</div>
+</div>
+</div>
+</div>
+<div class="h-full w-full absolute inset-0 flex items-center justify-center p-12 transition-opacity duration-500 opacity-0" id="view-reco">
+<div class="grid grid-cols-4 gap-8 w-full max-w-5xl">
+<div class="flex flex-col justify-center gap-4"><div class="p-3 border-2 border-secondary bg-white text-[9px] font-mono">EDGE_CDN</div><div class="p-3 border-2 border-secondary bg-white text-[9px] font-mono">GATEWAY</div></div>
+<div class="flex flex-col justify-center gap-4">
+<div class="p-3 border-2 border-secondary bg-secondary/5 text-[9px] font-mono text-secondary">AUTH_SVC (Multi-AZ)</div>
+<div class="p-3 border-2 border-secondary bg-white text-[9px] font-mono">APP_MAIN</div>
+</div>
+<div class="flex flex-col justify-center gap-4">
+<div class="p-3 border-2 border-secondary bg-secondary/5 text-[9px] font-mono text-secondary">+ REDIS_CACHE</div>
+<div class="flex gap-2">
+<div class="p-3 border-2 border-secondary bg-white text-[8px] font-mono">PSQL_PRIMARY</div>
+<div class="p-3 border-2 border-dashed border-secondary bg-white text-[8px] font-mono italic">PSQL_REPLICA</div>
+</div>
+<div class="p-3 border-2 border-secondary bg-secondary/5 text-[9px] font-mono text-secondary">+ DLQ_BROKER</div>
+</div>
+<div class="flex flex-col justify-center gap-4"><div class="p-3 border-2 border-secondary bg-white text-[9px] font-mono">TEMPORAL</div><div class="p-3 border-2 border-secondary bg-white text-[9px] font-mono">DATADOG</div></div>
+</div>
+</div>
+</div>
+</section>
+<!-- LIVE MONITORING SECTION (NEW) -->
+<section class="py-24 px-canvas-padding bg-white dark:bg-dark-surface border-b border-outline-variant">
+<div class="max-w-7xl mx-auto">
+<h2 class="font-display text-4xl font-bold mb-4">Live Monitoring</h2>
+<p class="text-on-surface-variant mb-12">Overlaying telemetry directly on your topology for instant root-cause analysis.</p>
+<div class="relative border-2 border-primary p-12 bg-surface-container-lowest overflow-hidden">
+<div class="grid grid-cols-4 gap-8">
+<!-- Edge Node with metric overlay -->
+<div class="service-node p-5 border-2 border-outline bg-white flex flex-col justify-between">
+<div class="font-mono text-[9px] uppercase">Cloudflare</div>
+<div class="mt-4 space-y-1">
+<div class="flex justify-between font-mono text-[8px]"><span>RPS</span><span class="text-secondary font-bold">14.2k</span></div>
+<div class="flex justify-between font-mono text-[8px]"><span>P95</span><span class="text-secondary font-bold">42ms</span></div>
+</div>
+</div>
+<!-- App Node with error alert -->
+<div class="service-node p-5 border-2 border-error bg-error/5 flex flex-col justify-between">
+<div class="font-mono text-[9px] uppercase">Auth_SVC</div>
+<div class="mt-4 space-y-1">
+<div class="flex justify-between font-mono text-[8px]"><span>ERR_RATE</span><span class="text-error font-bold">4.2%</span></div>
+<div class="flex justify-between font-mono text-[8px]"><span>CPU</span><span class="text-error font-bold">92%</span></div>
+</div>
+<div class="absolute -top-12 left-0 w-48 bg-error text-white p-2 text-[9px] font-mono shadow-xl z-20">
+                            ROOT_CAUSE: Connection leak in auth.go:142 detected.
+                        </div>
+</div>
+<!-- DB Node with saturation metric -->
+<div class="service-node p-5 border-2 border-outline bg-white flex flex-col justify-between">
+<div class="font-mono text-[9px] uppercase">PostgreSQL</div>
+<div class="mt-4 space-y-1">
+<div class="flex justify-between font-mono text-[8px]"><span>IOPS</span><span class="text-secondary font-bold">88%</span></div>
+<div class="flex justify-between font-mono text-[8px]"><span>HIT_RATE</span><span class="text-secondary font-bold">99%</span></div>
+</div>
+</div>
+<!-- MQ Node with lag metric -->
+<div class="service-node p-5 border-2 border-outline bg-white flex flex-col justify-between">
+<div class="font-mono text-[9px] uppercase">RabbitMQ</div>
+<div class="mt-4 space-y-1">
+<div class="flex justify-between font-mono text-[8px]"><span>Q_LAG</span><span class="text-secondary font-bold">140ms</span></div>
+<div class="flex justify-between font-mono text-[8px]"><span>CONSUMERS</span><span class="text-secondary font-bold">12</span></div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-4 right-4 font-mono text-[10px] text-outline italic">SYNC: REALTIME_TELEMETRY (0.8s offset)</div>
+</div>
+</div>
+</section>
+<!-- PRICING -->
+<section class="py-24 px-canvas-padding bg-surface dark:bg-dark-bg" id="pricing">
+<div class="text-center mb-16">
+<h2 class="font-display text-5xl font-bold">Build it right.</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-primary dark:bg-white border-2 border-primary dark:border-white max-w-5xl mx-auto">
+<!-- Free -->
+<div class="bg-white dark:bg-dark-surface p-10">
+<div class="font-label-caps text-[11px] text-outline mb-6">FREE</div>
+<div class="text-5xl font-bold mb-6">$0 <span class="text-sm font-normal opacity-50 font-display">/ mo</span></div>
+<ul class="space-y-4 mb-12 text-[11px] font-mono text-on-surface-variant">
+<li>- 5 Infrastructure Generations</li>
+<li>- 1 Active Project Canvas</li>
+<li>- Basic Security Auditing</li>
+<li>- Local MCP Protocol Sync</li>
+</ul>
+<button class="w-full border-2 border-primary py-4 font-label-caps text-[11px] tracking-widest hover:bg-surface transition-colors">START BUILDING FREE</button>
+</div>
+<!-- Builder -->
+<div class="bg-white dark:bg-dark-surface p-10 relative overflow-hidden border-x border-primary">
+<div class="absolute top-0 right-0 bg-secondary text-white px-10 py-1 text-[9px] font-bold font-label-caps translate-x-8 rotate-45 w-40 text-center uppercase">Best Value</div>
+<div class="font-label-caps text-[11px] text-secondary mb-6">BUILDER</div>
+<div class="text-5xl font-bold mb-6">$15 <span class="text-sm font-normal opacity-50 font-display">/ mo</span></div>
+<ul class="space-y-4 mb-12 text-[11px] font-mono text-on-surface-variant">
+<li>- Unlimited Private Projects</li>
+<li>- AWS/GCP/Azure <span class="text-[8px] font-bold text-secondary ml-1">BETA</span></li>
+<li>- Advanced Traffic Sims</li>
+<li>- Version History &amp; Diffing</li>
+</ul>
+<button class="w-full bg-primary text-white py-4 font-label-caps text-[11px] tracking-widest hover:opacity-90 transition-all shadow-[8px_8px_0px_0px_rgba(0,66,199,0.2)]">UPGRADE TO BUILDER</button>
+</div>
+<!-- Pro -->
+<div class="bg-white dark:bg-dark-surface p-10">
+<div class="font-label-caps text-[11px] text-outline mb-6">PRO</div>
+<div class="text-5xl font-bold mb-6">$24 <span class="text-sm font-normal opacity-50 font-display">/ mo</span></div>
+<ul class="space-y-4 mb-12 text-[11px] font-mono text-on-surface-variant">
+<li>- Real-time Monitoring Sync</li>
+<li>- Load Balancing Controls <span class="text-[8px] font-bold text-outline ml-1">PLANNED</span></li>
+<li>- CI/CD Arch Drifts Alerts</li>
+<li>- Dedicated Support Lead</li>
+</ul>
+<button class="w-full border-2 border-primary py-4 font-label-caps text-[11px] tracking-widest hover:bg-surface transition-colors">CHOOSE PRO</button>
+</div>
+</div>
+<div class="text-center mt-24">
+<h3 class="font-display text-3xl font-bold mb-8">Ready to evolve your system?</h3>
+<button class="bg-primary text-white px-12 py-6 font-label-caps tracking-widest text-[14px] hover:bg-secondary transition-all">START BUILDING FREE</button>
+</div>
+</section>
+</main>
+<!-- FOOTER -->
+<footer class="bg-white dark:bg-dark-bg border-t border-primary py-12 px-canvas-padding flex flex-col md:flex-row justify-between items-center w-full gap-8">
+<div class="font-label-caps text-[11px] tracking-widest text-on-surface font-bold">© 2024 AXON INTELLIGENCE [LAT 40.7128, LON -74.0060]</div>
+<div class="flex gap-16 font-mono text-[11px] text-on-surface-variant">
+<a class="hover:text-secondary transition-colors" href="#">PROTOCOLS</a>
+<a class="hover:text-secondary transition-colors" href="#">SECURITY</a>
+<a class="hover:text-secondary transition-colors" href="#">API_DOCS</a>
+</div>
+</footer>
+<script>
+    // Theme Toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    themeToggle.addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+    });
+
+    // Hero Audit Logic
+    const auditBtn = document.getElementById('hero-audit-trigger');
+    const findings = ['finding-auth', 'finding-mq'];
+    const nodes = ['node-auth', 'node-mq'];
+
+    auditBtn.addEventListener('click', () => {
+        findings.forEach((id, index) => {
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                el.classList.toggle('active');
+                if (el.classList.contains('active')) {
+                    document.getElementById(nodes[index]).classList.add('border-secondary', 'node-pulse');
+                } else {
+                    document.getElementById(nodes[index]).classList.remove('border-secondary', 'node-pulse');
+                }
+            }, index * 400);
+        });
+    });
+
+    // Simulation Slider
+    const rpsSlider = document.getElementById('rps-slider');
+    const rpsValue = document.getElementById('rps-value');
+    const dbFill = document.getElementById('db-load-fill');
+    const dbNode = document.getElementById('sim-node-db');
+    const failMsg = document.getElementById('fail-point');
+    const simFlow = document.getElementById('sim-flow');
+    const qLag = document.getElementById('q-lag');
+    const satVal = document.getElementById('sat-val');
+    const trafficVal = document.getElementById('sim-traffic-val');
+
+    rpsSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        rpsValue.textContent = (val/1000).toFixed(1) + 'k / s';
+        trafficVal.textContent = (val/1000).toFixed(1) + 'k';
+        
+        const load = (val / 25000) * 100;
+        dbFill.style.width = load + '%';
+        simFlow.style.width = load + '%';
+        satVal.textContent = Math.round(load) + '%';
+
+        if (val > 12400) {
+            dbNode.classList.add('bg-error/20', 'border-error');
+            failMsg.classList.remove('hidden');
+            qLag.textContent = 'Q_LAG: ' + Math.round((val-12400)/10) + 'ms';
+            qLag.classList.add('text-error', 'font-bold');
+        } else {
+            dbNode.classList.remove('bg-error/20', 'border-error');
+            failMsg.classList.add('hidden');
+            qLag.textContent = 'Q_LAG: 0ms';
+            qLag.classList.remove('text-error', 'font-bold');
+        }
+    });
+
+    document.getElementById('run-simulation').addEventListener('click', () => {
+        let current = 1200;
+        let target = 22000;
+        let step = (target - current) / 40;
+        let count = 0;
+        
+        const interval = setInterval(() => {
+            current += step;
+            rpsSlider.value = current;
+            rpsSlider.dispatchEvent(new Event('input'));
+            count++;
+            if (count >= 40) clearInterval(interval);
+        }, 30);
+    });
+
+    // Diff Toggles
+    const btnCurrent = document.getElementById('diff-current');
+    const btnReco = document.getElementById('diff-reco');
+    const viewCurrent = document.getElementById('view-current');
+    const viewReco = document.getElementById('view-reco');
+
+    btnCurrent.addEventListener('click', () => {
+        btnCurrent.classList.add('bg-white', 'text-black');
+        btnReco.classList.remove('bg-white', 'text-black');
+        viewCurrent.style.opacity = '1';
+        viewReco.style.opacity = '0';
+    });
+
+    btnReco.addEventListener('click', () => {
+        btnReco.classList.add('bg-white', 'text-black');
+        btnCurrent.classList.remove('bg-white', 'text-black');
+        viewReco.style.opacity = '1';
+        viewCurrent.style.opacity = '0.1';
+    });
+</script>
+</body></html>
