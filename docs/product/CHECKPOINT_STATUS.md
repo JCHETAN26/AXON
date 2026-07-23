@@ -18,15 +18,16 @@
 >   fakes had been masking the missing tables. This surfaced and fixed a real
 >   foreign-key bug in the infrastructure-PR service.
 >
-> **Current gate:** typecheck 0 errors · `pnpm test` green (web 407, repo-intel
-> 17, all packages) · lint clean · production build compiles.
+> **Current gate:** typecheck 10/10 · lint 10/10 · `pnpm test` green (web 451,
+> repo-intel 48, mcp-server 3, all packages) · production build compiles ·
+> client-bundle secret scan clean.
 >
 > **Not yet done / known gaps** (see per-checkpoint notes):
-> - Migration `0003` is validated on PGlite but **not yet applied to live
->   Supabase**.
-> - **Checkpoint 8** lacks its security core (no webhook, signature
->   verification, delivery dedup, or job system) and produces a shallow,
->   evidence-free analysis → **BLOCKED**.
+> - Migrations `0003` and `0004` are validated on PGlite but **not yet applied
+>   to live Supabase**.
+> - **Checkpoint 8** security core (webhook + HMAC signature + delivery dedup +
+>   PG-backed jobs) is now built and tested, but analysis is still shallow (empty
+>   proposal, extension-based risk) and the job dispatch is not wired → **IN_PROGRESS**.
 > - **Checkpoints 10 and 11** persist correctly but use **hardcoded mock data**
 >   for the actual cloud discovery / telemetry calibration → **IN_PROGRESS**.
 > - **Checkpoint 5** is only partially built (Phase A committed; B–D
@@ -48,6 +49,14 @@
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
 | 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (persistence verified; calibration ignores ingested metrics) |
 | 12 | AUTOMATED_VALIDATION_PASSING | Controlled infrastructure PRs (codegen + DB verified; live PR creation is a manual gate) |
+| 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, and MCP tool subset exist; core scope remains partial) |
+| 14 | NOT_STARTED | Cloud cost intelligence |
+| 15 | NOT_STARTED | Visual Architecture Studio |
+| 16 | NOT_STARTED | Full multi-cloud workspace |
+| 17 | NOT_STARTED | Collaboration, sharing, and presentation |
+| 18 | NOT_STARTED | Grounded architecture copilot |
+| 19 | NOT_STARTED | Benchmarks, security, and scale |
+| 20 | NOT_STARTED | Production release and launch |
 
 > Note on numbering: this repo also documents a separate "Public Beta Launch"
 > checkpoint series (security, account lifecycle, production readiness) in
@@ -152,3 +161,63 @@
 - **Manual gate**: actual GitHub branch/PR creation
   (`createBranchAndPullRequest`) requires a live GitHub App →
   `MANUAL_VALIDATION_REQUIRED`.
+
+## Checkpoint 13 — Local MCP and Fully Local Mode
+
+- **Status**: `IN_PROGRESS`
+- **Verified on 2026-07-23**:
+  - Local workspace boundary, local analyzer, and file watcher exist in
+    `@axon/repo-intel`.
+  - MCP package exists with strict Zod schemas and a limited tool set:
+    inspect/inventory/analyze/get architecture/list evidence/explain evidence/
+    audit/export.
+  - Hosted app has local-agent create/list/revoke APIs, sync-run metadata, and a
+    Local Intelligence workspace component.
+  - Targeted automated gates now pass:
+    `pnpm --filter @axon/repo-intel test`,
+    `pnpm --filter @axon/mcp-server test`,
+    `pnpm --filter @axon/mcp-server typecheck`,
+    `pnpm --filter @axon/mcp-server lint`,
+    `pnpm --filter @axon/web test -- local-agent local-intelligence`,
+    `pnpm --filter @axon/web typecheck`, and
+    `pnpm --filter @axon/web lint`.
+- **Fixes made in this pass**:
+  - Fixed macOS `/var` vs `/private/var` canonical-root handling while
+    preserving symlink-escape checks.
+  - Added the missing MCP package entrypoint, tests, Node type config, and lint
+    config.
+  - Fixed Local Intelligence status badge usage to match the shared UI status
+    vocabulary.
+  - Enforced five-minute, single-use local-agent pairing tokens in the service
+    and added expiry/replay tests.
+  - Fixed strict TypeScript optional-property handling in local-agent routes and
+    sync review manifests.
+- **Known gaps**:
+  - MCP server is a tool library/package surface, not a complete runnable local
+    MCP transport with install/start/manual validation.
+  - Required tools are still missing or deferred: update proposal, create/
+    simulate scenario, compare snapshots, compare clouds, plan migration,
+    synchronize evidence, and future cost estimation.
+  - Fully local database/project/evidence/scenario persistence is not complete.
+  - Evidence synchronization records only run metadata; approved evidence rows
+    are not persisted as first-class synchronized evidence with redaction
+    metadata and provenance.
+  - Pairing creates a one-time pairing token, but durable non-cookie local-agent
+    credentials and a local-agent auth endpoint are not yet wired.
+  - File watching reports changed files but does not yet produce the complete
+    local proposal/diff/approval workflow.
+  - No CLI command surface is implemented.
+  - No manual validation has been performed with a fixture repository.
+- **Next checkpoint**: Continue Checkpoint 13 until its MCP transport, CLI,
+  local persistence, sync review, and manual gates are complete; do not start
+  Checkpoint 14 as passing-work until this dependency is resolved.
+
+## Checkpoints 14–20 — Remaining Sequence
+
+- **Status**: `NOT_STARTED`
+- **Verified**: No checkpoint 14–20 domain tables or service implementations
+  were found beyond older landing-page pricing copy and earlier AWS-to-GCP
+  migration/catalog work.
+- **Next dependency**: Checkpoint 13 must reach at least
+  `AUTOMATED_VALIDATION_PASSING` before cloud cost intelligence is built on top
+  of the local/MCP entry path.

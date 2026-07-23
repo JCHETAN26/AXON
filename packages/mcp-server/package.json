@@ -1,5 +1,5 @@
 {
-  "name": "@axon/diagram-schema",
+  "name": "@axon/mcp-server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,12 +7,19 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "axon-mcp": "./bin/axon-mcp.ts"
+  },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@axon/repo-intel": "workspace:*",
+    "@axon/architecture-audit": "workspace:*",
+    "@axon/architecture-simulation": "workspace:*",
+    "@axon/diagram-schema": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

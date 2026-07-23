@@ -13,3 +13,6 @@ export * from "./migration/aws-to-gcp-engine";
 export * from "./cloud/cloud-schemas";
 export * from "./cloud/cloud-discovery-engine";
 export * from "./iac-generator/iac-generator";
+export * from "./local/workspace-boundary";
+export * from "./local/local-analyzer";
+export * from "./local/file-watcher";
