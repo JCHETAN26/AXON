@@ -96,6 +96,12 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
     apiEnforced: true,
   },
   {
+    pattern: "/api/projects/[projectId]/cost/assumptions",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
     pattern: "/api/projects/[projectId]/cost/estimate",
     class: "owner-api",
     proxyProtected: false,
@@ -133,6 +139,18 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
   },
   {
     pattern: "/api/projects/[projectId]/share-links/[shareLinkId]",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/telemetry/metrics",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/telemetry/sources",
     class: "owner-api",
     proxyProtected: false,
     apiEnforced: true,

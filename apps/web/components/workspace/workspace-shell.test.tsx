@@ -1,6 +1,6 @@
 import { ThemeProvider } from "@axon/ui";
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceShell } from "./workspace-shell";
 import { getProjectRepository } from "@/lib/projects/get-repository";
@@ -8,6 +8,7 @@ import { getProjectRepository } from "@/lib/projects/get-repository";
 describe("WorkspaceShell", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   it("shows a not-found state for unknown projects", async () => {
@@ -43,6 +44,7 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("tab", { name: "Canvas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Audit" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Simulate" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Monitor" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Multi-cloud" })).toHaveAttribute(
       "aria-selected",
       "false",
@@ -60,7 +62,7 @@ describe("WorkspaceShell", () => {
       "false",
     );
     expect(screen.getByRole("tab", { name: "Import" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getAllByText("Planned")).toHaveLength(1);
+    expect(screen.queryByText("Planned")).not.toBeInTheDocument();
     expect(screen.getByText(/edits autosave locally/)).toBeVisible();
     // The editor surface is present with its save state.
     expect(screen.getByRole("status", { name: "Save status" })).toHaveTextContent(/SAVED/);
@@ -202,6 +204,58 @@ describe("WorkspaceShell", () => {
         "Estimated from supplied architecture parameters—not a production benchmark.",
       ),
     ).toBeVisible();
+  });
+
+  it("switches to the monitor workspace tab and loads telemetry calibration", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Observe me",
+      template: "sample",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/telemetry/sources")) {
+        return Response.json({
+          sources: [
+            {
+              id: "src-1",
+              provider: "prometheus",
+              name: "Prod Prometheus",
+              endpointUrl: "https://prometheus.internal",
+              status: "connected",
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/telemetry/metrics")) {
+        return Response.json({
+          calibratedProfile: {
+            components: {
+              "web-server": {
+                requestsPerSecondPerUnit: 1200,
+                units: 12,
+              },
+            },
+          },
+          calibratedComponentCount: 1,
+          calibrationConfidence: "confirmed",
+        });
+      }
+      return new Response("Not Found", { status: 404 });
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Monitor" }));
+    expect(screen.getByRole("tab", { name: "Monitor" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("Prod Prometheus")).toBeVisible();
+    expect(screen.getByText("web-server")).toBeVisible();
+    expect(screen.getByText("telemetry-measured")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(`/api/projects/${created.project.id}/telemetry/sources`);
   });
 
   it("offers prompt-to-architecture generation for blank documents", async () => {

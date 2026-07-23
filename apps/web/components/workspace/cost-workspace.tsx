@@ -4,6 +4,7 @@ import {
   estimateArchitectureCost,
   estimateArchitectureCostAcrossProviders,
   estimateArchitectureCostAtScale,
+  type UsageDriver,
 } from "@axon/architecture-cost";
 import { type ArchitectureDocument } from "@axon/diagram-schema";
 import { Button, StatusBadge } from "@axon/ui";
@@ -38,8 +39,15 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
   const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
   );
+  const [usageDrivers, setUsageDrivers] = useState<UsageDriver[]>(() =>
+    defaultUsageFor(document).drivers,
+  );
+  const [assumptionsStatus, setAssumptionsStatus] = useState<
+    "idle" | "loading" | "ready" | "saving" | "saved" | "error"
+  >("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const usageProfile = useMemo(() => defaultUsageFor(document), [document]);
+  const defaultUsageProfile = useMemo(() => defaultUsageFor(document), [document]);
+  const usageProfile = useMemo(() => ({ drivers: usageDrivers }), [usageDrivers]);
   const estimate = useMemo(
     () =>
       estimateArchitectureCost({
@@ -70,6 +78,47 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
   );
   const historyUrl = `/api/projects/${encodeURIComponent(document.projectId)}/cost/estimates`;
   const estimateUrl = `/api/projects/${encodeURIComponent(document.projectId)}/cost/estimate`;
+  const assumptionsUrl = `/api/projects/${encodeURIComponent(document.projectId)}/cost/assumptions`;
+
+  useEffect(() => {
+    setUsageDrivers(defaultUsageProfile.drivers);
+  }, [defaultUsageProfile]);
+
+  const mergeUsageDrivers = useCallback(
+    (persisted: readonly UsageDriver[]) => {
+      const overrides = new Map(
+        persisted.map((driver) => [`${driver.componentId}:${driver.unit}`, driver] as const),
+      );
+      const merged = defaultUsageProfile.drivers.map(
+        (driver) => overrides.get(`${driver.componentId}:${driver.unit}`) ?? driver,
+      );
+      const defaultKeys = new Set(
+        defaultUsageProfile.drivers.map((driver) => `${driver.componentId}:${driver.unit}`),
+      );
+      for (const driver of persisted) {
+        if (!defaultKeys.has(`${driver.componentId}:${driver.unit}`)) {
+          merged.push(driver);
+        }
+      }
+      return merged;
+    },
+    [defaultUsageProfile.drivers],
+  );
+
+  const loadAssumptions = useCallback(async () => {
+    setAssumptionsStatus("loading");
+    try {
+      const response = await fetch(assumptionsUrl, { headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error("Failed to load cost assumptions");
+      const payload = (await response.json()) as { usageDrivers?: UsageDriver[] };
+      setUsageDrivers(mergeUsageDrivers(payload.usageDrivers ?? []));
+      setAssumptionsStatus("ready");
+    } catch {
+      setUsageDrivers(defaultUsageProfile.drivers);
+      setAssumptionsStatus("error");
+    }
+  }, [assumptionsUrl, defaultUsageProfile.drivers, mergeUsageDrivers]);
+
   const loadHistory = useCallback(async () => {
     setHistoryStatus("loading");
     try {
@@ -85,8 +134,43 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
   }, [historyUrl]);
 
   useEffect(() => {
+    void loadAssumptions();
     void loadHistory();
-  }, [loadHistory]);
+  }, [loadAssumptions, loadHistory]);
+
+  const updateUsageValue = useCallback((driverId: string, value: number) => {
+    setUsageDrivers((current) =>
+      current.map((driver) =>
+        driver.id === driverId
+          ? {
+              ...driver,
+              value,
+              source: "user-supplied",
+              confidence: "medium",
+              userOverride: true,
+              derivation: "User-supplied monthly usage assumption from Cost Explorer.",
+              observedAt: new Date().toISOString(),
+            }
+          : driver,
+      ),
+    );
+    setAssumptionsStatus("idle");
+  }, []);
+
+  const saveAssumptions = useCallback(async () => {
+    setAssumptionsStatus("saving");
+    try {
+      const response = await fetch(assumptionsUrl, {
+        method: "PUT",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ usageDrivers }),
+      });
+      if (!response.ok) throw new Error("Failed to save cost assumptions");
+      setAssumptionsStatus("saved");
+    } catch {
+      setAssumptionsStatus("error");
+    }
+  }, [assumptionsUrl, usageDrivers]);
 
   const saveEstimate = useCallback(async () => {
     setSaveStatus("saving");
@@ -154,6 +238,66 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
           AWS · us-east-1 · USD · catalog {estimate.pricingCatalogVersion} · effective{" "}
           {estimate.pricingEffectiveDate}
         </p>
+      </section>
+
+      <section className="border-2 border-border bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="type-label-caps text-foreground-muted">Usage Assumptions</h3>
+            <p className="type-body-sm mt-2 text-foreground-muted">
+              Edit monthly usage inputs before saving an estimate. User-supplied values are stored
+              as assumptions, not provider billing data.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge kind={assumptionsStatus === "error" ? "warning" : "info"}>
+              {assumptionsStatus === "loading"
+                ? "LOADING"
+                : assumptionsStatus === "saving"
+                  ? "SAVING"
+                  : `${usageDrivers.filter((driver) => driver.userOverride).length} OVERRIDES`}
+            </StatusBadge>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void saveAssumptions()}
+              disabled={assumptionsStatus === "saving"}
+            >
+              {assumptionsStatus === "saving" ? "Saving" : "Save assumptions"}
+            </Button>
+          </div>
+        </div>
+        {assumptionsStatus === "saved" ? (
+          <p className="type-body-sm mt-3 text-foreground-muted">Usage assumptions saved.</p>
+        ) : null}
+        {assumptionsStatus === "error" ? (
+          <p className="type-body-sm mt-3 text-warning">Usage assumptions unavailable.</p>
+        ) : null}
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {usageDrivers.map((driver) => {
+            const node = document.nodes.find((item) => item.id === driver.componentId);
+            const label = `${node?.name ?? driver.componentId} (${driver.unit})`;
+            return (
+              <label key={driver.id} className="flex flex-col gap-2 border-2 border-border p-3">
+                <span className="type-body-md text-foreground">{label}</span>
+                <input
+                  aria-label={`Usage value for ${label}`}
+                  className="border-2 border-border bg-surface px-3 py-2 type-mono-data text-foreground"
+                  min={0}
+                  step={1}
+                  type="number"
+                  value={driver.value}
+                  onChange={(event) => {
+                    updateUsageValue(driver.id, Number(event.currentTarget.value));
+                  }}
+                />
+                <span className="type-mono-data text-xs text-foreground-muted">
+                  {driver.source} · {driver.confidence} · {driver.derivation}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </section>
 
       <section className="border-2 border-border bg-surface p-4">

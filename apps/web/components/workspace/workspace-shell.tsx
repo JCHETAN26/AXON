@@ -2,9 +2,12 @@
 
 import { type ProjectAuditState } from "@axon/architecture-audit";
 import {
+  BASELINE_SCENARIO,
   runSimulation,
+  type CalibrationResult,
   type ProjectSimulationState,
   type SimulationResult,
+  type TelemetryProvider,
 } from "@axon/architecture-simulation";
 import { type ProjectRecommendationState } from "@axon/architecture-recommendations";
 import { buttonClasses, cx } from "@axon/ui";
@@ -25,6 +28,7 @@ import { PresentationWorkspace } from "./presentation-workspace";
 import { RecommendationWorkspace } from "./recommendation-workspace";
 import { SharingWorkspace } from "./sharing-workspace";
 import { SimulationWorkspace } from "./simulation-workspace";
+import { TelemetryCalibrationWorkspace, type TelemetrySourceItem } from "./telemetry-workspace";
 import { ArchitectureCanvasEditor } from "@/components/canvas/architecture-canvas-editor";
 import { AuditOverlayProvider } from "@/components/canvas/audit-overlay-context";
 import { CostOverlayProvider } from "@/components/canvas/cost-overlay-context";
@@ -36,13 +40,17 @@ import { getImportRepository } from "@/lib/import/get-import-repository";
 import { type ImportDraft } from "@/lib/import/import-repository";
 import { getRecommendationRepository } from "@/lib/recommendations/get-recommendation-repository";
 import { getSimulationRepository } from "@/lib/simulation/get-simulation-repository";
-
-const PLANNED_TOOLS = ["Monitor"] as const;
+import {
+  buildSimulationState,
+  initialProfile,
+  withCapacityProfile,
+} from "@/lib/simulation/simulation-view";
 
 type WorkspaceTool =
   | "canvas"
   | "audit"
   | "simulate"
+  | "monitor"
   | "cost"
   | "multi-cloud"
   | "icons"
@@ -58,6 +66,7 @@ const TOOL_LABEL: Record<WorkspaceTool, string> = {
   canvas: "Canvas",
   audit: "Audit",
   simulate: "Simulate",
+  monitor: "Monitor",
   cost: "Cost",
   "multi-cloud": "Multi-cloud",
   icons: "Icons",
@@ -73,6 +82,7 @@ const TOOLS: readonly WorkspaceTool[] = [
   "canvas",
   "audit",
   "simulate",
+  "monitor",
   "cost",
   "multi-cloud",
   "icons",
@@ -88,6 +98,22 @@ const TOOLS: readonly WorkspaceTool[] = [
 type ShellState =
   { status: "loading" } | { status: "not-found" } | { status: "ready"; data: ProjectWithDocument };
 
+type TelemetryState =
+  | { status: "idle" | "loading"; sources: TelemetrySourceItem[]; calibration: CalibrationResult }
+  | { status: "ready"; sources: TelemetrySourceItem[]; calibration: CalibrationResult }
+  | {
+      status: "error";
+      sources: TelemetrySourceItem[];
+      calibration: CalibrationResult;
+      message: string;
+    };
+
+const EMPTY_CALIBRATION: CalibrationResult = {
+  calibratedProfile: { components: {} },
+  calibratedComponentCount: 0,
+  calibrationConfidence: "medium",
+};
+
 export function WorkspaceShell({ projectId }: { projectId: string }) {
   const [state, setState] = useState<ShellState>({ status: "loading" });
   const [activeTool, setActiveTool] = useState<WorkspaceTool>("canvas");
@@ -97,6 +123,12 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
     null,
   );
   const [importDraft, setImportDraft] = useState<ImportDraft | null>(null);
+  const [telemetryState, setTelemetryState] = useState<TelemetryState>({
+    status: "idle",
+    sources: [],
+    calibration: EMPTY_CALIBRATION,
+  });
+  const telemetryLoadedProjectRef = useRef<string | null>(null);
   // Bumped only when the document is replaced from outside the canvas editor
   // (applying a recommendation). The editor owns its canvas state once
   // mounted, so it must be remounted to pick the new document up — otherwise
@@ -106,6 +138,12 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    telemetryLoadedProjectRef.current = null;
+    setTelemetryState({
+      status: "idle",
+      sources: [],
+      calibration: EMPTY_CALIBRATION,
+    });
     void getProjectRepository()
       .getProject(projectId)
       .then((data) => {
@@ -146,6 +184,48 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
+  useEffect(() => {
+    if (activeTool !== "monitor" || telemetryLoadedProjectRef.current === projectId) return;
+    let cancelled = false;
+    telemetryLoadedProjectRef.current = projectId;
+
+    async function loadTelemetry() {
+      setTelemetryState((current) => ({ ...current, status: "loading" }));
+      try {
+        const [sourcesResponse, calibrationResponse] = await Promise.all([
+          fetch(`/api/projects/${projectId}/telemetry/sources`),
+          fetch(`/api/projects/${projectId}/telemetry/metrics`),
+        ]);
+        if (!sourcesResponse.ok || !calibrationResponse.ok) {
+          throw new Error("Could not load telemetry calibration data.");
+        }
+        const sourcesJson = (await sourcesResponse.json()) as { sources?: TelemetrySourceItem[] };
+        const calibration = (await calibrationResponse.json()) as CalibrationResult;
+        if (!cancelled) {
+          setTelemetryState({
+            status: "ready",
+            sources: sourcesJson.sources ?? [],
+            calibration,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTelemetryState((current) => ({
+            ...current,
+            status: "error",
+            message:
+              error instanceof Error ? error.message : "Could not load telemetry calibration data.",
+          }));
+        }
+      }
+    }
+
+    void loadTelemetry();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTool, projectId]);
+
   // Canvas overlays reuse the persisted simulation inputs, recomputed against
   // the document on screen so the overlay can never describe a stale graph.
   const canvasSimulation = useMemo<SimulationResult | null>(() => {
@@ -180,6 +260,62 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
   const focusTool = (tool: WorkspaceTool) => {
     setActiveTool(tool);
     tabRefs.current[tool]?.focus();
+  };
+
+  const registerTelemetrySource = async (
+    provider: TelemetryProvider,
+    name: string,
+    endpointUrl: string,
+  ) => {
+    const response = await fetch(`/api/projects/${project.id}/telemetry/sources`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider, name, endpointUrl }),
+    });
+    if (!response.ok) {
+      throw new Error("Could not register telemetry source.");
+    }
+    const payload = (await response.json()) as { sourceId: string };
+    setTelemetryState((current) => ({
+      status: "ready",
+      calibration: current.calibration,
+      sources: [
+        {
+          id: payload.sourceId,
+          provider,
+          name,
+          endpointUrl,
+          status: "connected",
+        },
+        ...current.sources,
+      ],
+    }));
+  };
+
+  const applyTelemetryCalibration = async () => {
+    const profile = simulationState?.profile ?? initialProfile();
+    const scenario = simulationState?.scenario ?? BASELINE_SCENARIO;
+    const nextProfile = withCapacityProfile(profile, {
+      ...profile.capacityProfile,
+      components: {
+        ...profile.capacityProfile.components,
+        ...telemetryState.calibration.calibratedProfile.components,
+      },
+    });
+    const result = runSimulation({
+      document,
+      scenario,
+      capacityProfile: nextProfile.capacityProfile,
+    });
+    const nextState = buildSimulationState({
+      document,
+      scenario,
+      profile: nextProfile,
+      result,
+      now: new Date().toISOString(),
+    });
+    await getSimulationRepository().saveSimulationState(nextState);
+    setSimulationState(nextState);
   };
 
   return (
@@ -235,18 +371,6 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
             </button>
           ))}
         </div>
-        {PLANNED_TOOLS.map((tool) => (
-          <span
-            key={tool}
-            className={cx(
-              "type-label-caps flex items-center gap-2 border-2 border-dashed border-border px-3 py-1.5",
-              "text-foreground-muted",
-            )}
-          >
-            {tool}
-            <span className="border border-border px-1 py-0.5">Planned</span>
-          </span>
-        ))}
       </div>
 
       <div
@@ -319,6 +443,28 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
           simulationState={simulationState}
           onSimulationStateChange={setSimulationState}
         />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-monitor"
+        aria-labelledby="workspace-tab-monitor"
+        hidden={activeTool !== "monitor"}
+      >
+        {telemetryState.status === "error" ? (
+          <div role="alert" className="border-2 border-danger bg-danger-muted p-4">
+            <p className="type-label-caps text-danger">Telemetry unavailable</p>
+            <p className="type-body-md mt-2 text-foreground">{telemetryState.message}</p>
+          </div>
+        ) : (
+          <TelemetryCalibrationWorkspace
+            projectId={project.id}
+            sources={telemetryState.sources}
+            calibrationResult={telemetryState.calibration}
+            onRegisterSource={registerTelemetrySource}
+            onApplyCalibration={applyTelemetryCalibration}
+          />
+        )}
       </div>
 
       <div

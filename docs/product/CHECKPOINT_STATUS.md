@@ -222,8 +222,19 @@
   rows** for the project's sources and calibrates from them (unknown metric names
   are ignored, never guessed); with no usable samples it returns an empty
   calibration rather than fabricating one. Tested against the real DB.
-- **Remaining**: telemetry UI, and a live telemetry source (Prometheus/OTel)
-  ingestion path — a manual validation gate.
+- **UI slice added on 2026-07-23**: the main workspace now exposes `Monitor` as
+  a real tab rather than a planned badge. It lazy-loads owner-scoped telemetry
+  sources and calibration from the existing project telemetry APIs, lists
+  connected providers, shows telemetry-measured capacity overrides, and can
+  apply those measured overrides into the Scenario Lab simulation profile
+  without fabricating samples.
+- **Targeted gates**:
+  `pnpm --filter @axon/web test -- workspace-shell telemetry-workspace`,
+  `pnpm --filter @axon/web typecheck`, and
+  `pnpm --filter @axon/web lint`.
+- **Remaining**: a live telemetry source (Prometheus/OTel) ingestion path,
+  manual validation against that live source, and richer source management
+  beyond registering/listing/applying calibration.
 
 ## Checkpoint 12 — Controlled Infrastructure Pull Requests
 
@@ -372,6 +383,10 @@
   - Added a bounded canvas cost-driver overlay that marks only the top modeled
     monthly cost drivers and includes catalog/confidence text for assistive
     technology.
+  - Added owner-scoped cost usage-assumptions API routes and editable Cost
+    Explorer controls for monthly usage inputs. User edits are labeled
+    `user-supplied`, update the deterministic estimate immediately, can be
+    saved independently, and are reused when saving estimate runs.
   - Targeted automated gates pass:
     `pnpm --filter @axon/architecture-cost test` (9 tests),
     `pnpm --filter @axon/architecture-cost typecheck`,
@@ -379,13 +394,12 @@
     `pnpm --filter @axon/mcp-server test`,
     `pnpm --filter @axon/mcp-server typecheck`,
     `pnpm --filter @axon/mcp-server lint`, and
-    `pnpm --filter @axon/web test -- cost-service cost/estimate cost/estimates route-matrix cost-workspace workspace-shell`,
+    `pnpm --filter @axon/web test -- cost-service cost/estimate cost/estimates cost/assumptions route-matrix cost-workspace workspace-shell`,
     `pnpm --filter @axon/web typecheck`, and
     `pnpm --filter @axon/web lint`.
 - **Known gaps**:
-  - Cost Explorer UI is still an initial deterministic view; editable
-    assumptions, richer historical comparison, and export workflows are not
-    complete.
+  - Cost Explorer UI supports editable monthly assumptions, but richer
+    historical comparison and export workflows are not complete.
   - Cost persistence stores usage assumptions and estimate runs, but catalog
     records themselves are not yet persisted/refreshable.
   - The initial catalog is an offline deterministic test catalog, not a live

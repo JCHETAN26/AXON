@@ -26,6 +26,9 @@ describe("CostWorkspace", () => {
       "fetch",
       vi.fn(async (url: string | URL | Request) => {
         const target = String(url);
+        if (target.includes("/cost/assumptions")) {
+          return Response.json({ usageDrivers: [] });
+        }
         if (target.includes("/cost/estimates")) {
           return Response.json({ estimates: [] });
         }
@@ -44,6 +47,7 @@ describe("CostWorkspace", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("10x")).toBeInTheDocument();
     expect(screen.getByText("Cloud Comparison")).toBeInTheDocument();
+    expect(screen.getByText("Usage Assumptions")).toBeInTheDocument();
     expect(screen.getByText("GCP · us-central1")).toBeInTheDocument();
     expect(screen.getByText("AZURE · eastus")).toBeInTheDocument();
     expect(screen.getByText("API")).toBeInTheDocument();
@@ -56,6 +60,9 @@ describe("CostWorkspace", () => {
   it("saves the current estimate and refreshes history", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const target = String(url);
+      if (target.includes("/cost/assumptions")) {
+        return Response.json({ usageDrivers: [] });
+      }
       if (target.includes("/cost/estimates")) {
         return Response.json({
           estimates: [
@@ -86,5 +93,36 @@ describe("CostWorkspace", () => {
     );
     expect(await screen.findByText("Estimate saved with catalog metadata.")).toBeInTheDocument();
     expect(await screen.findByText("$123.45 · 7/22/2026")).toBeInTheDocument();
+  });
+
+  it("edits and saves user-supplied usage assumptions", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.includes("/cost/assumptions")) {
+        return Response.json({ usageDrivers: [] });
+      }
+      if (target.includes("/cost/estimates")) {
+        return Response.json({ estimates: [] });
+      }
+      return Response.json({ runId: "run-1" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CostWorkspace document={fixtureDocument()} />);
+
+    const apiInput = await screen.findByLabelText("Usage value for API (instance-hours)");
+    await userEvent.clear(apiInput);
+    await userEvent.type(apiInput, "1460");
+    await userEvent.click(screen.getByRole("button", { name: "Save assumptions" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/project-cost/cost/assumptions",
+        expect.objectContaining({
+          method: "PUT",
+          body: expect.stringContaining("\"value\":1460"),
+        }),
+      ),
+    );
+    expect(await screen.findByText("Usage assumptions saved.")).toBeInTheDocument();
   });
 });
