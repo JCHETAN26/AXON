@@ -664,6 +664,12 @@
     `MANUAL_VALIDATION_REQUIRED`.
   - Manual-validation and blocked gates take precedence over readiness labels,
     with a concrete next action.
+  - Added a default AXON release gate builder that converts known automated,
+    secret-scan, live GitHub, live telemetry, deployment, backup/restore,
+    billing, support, monitoring, and security-review evidence into the
+    classifier's gate contract. It is deliberately conservative: automated
+    validation can pass product-loop gates, but live/manual gates remain
+    `manual-validation-required` unless explicit evidence is supplied.
   - Targeted automated gates pass:
     `pnpm --filter @axon/web test -- release-readiness`,
     `pnpm --filter @axon/web typecheck`, and

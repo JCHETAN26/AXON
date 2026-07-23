@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyReleaseReadiness, type ReleaseGate } from "./release-readiness";
+import {
+  buildDefaultAxonReleaseGates,
+  classifyReleaseReadiness,
+  type ReleaseGate,
+} from "./release-readiness";
 
 const GA_GATES: ReleaseGate[] = [
   "production-deployment",
@@ -60,5 +64,42 @@ describe("classifyReleaseReadiness", () => {
       { id: "security-review", label: "Security review", status: "passing" },
     ]);
     expect(report.classification).toBe("MANUAL_VALIDATION_REQUIRED");
+  });
+});
+
+describe("buildDefaultAxonReleaseGates", () => {
+  it("keeps AXON in manual validation when only automated validation is known", () => {
+    const gates = buildDefaultAxonReleaseGates({
+      automatedValidationPassing: true,
+      clientBundleSecretScanPassing: true,
+    });
+    const report = classifyReleaseReadiness(gates);
+
+    expect(report.classification).toBe("MANUAL_VALIDATION_REQUIRED");
+    expect(report.passing.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["prompt-loop", "deletion-export", "local-mcp-loop", "team-loop"]),
+    );
+    expect(report.manualValidationRequired.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["github-loop", "production-deployment", "monitoring-alerting"]),
+    );
+  });
+
+  it("classifies GA only when all default live and manual gates pass", () => {
+    const gates = buildDefaultAxonReleaseGates({
+      automatedValidationPassing: true,
+      clientBundleSecretScanPassing: true,
+      liveGithubAppValidationPassing: true,
+      liveTelemetryValidationPassing: true,
+      productionDeploymentValidated: true,
+      backupRestoreValidated: true,
+      billingValidated: true,
+      supportProcessValidated: true,
+      monitoringAlertingValidated: true,
+      securityReviewValidated: true,
+    });
+
+    expect(classifyReleaseReadiness(gates).classification).toBe(
+      "READY_FOR_GENERAL_AVAILABILITY",
+    );
   });
 });
