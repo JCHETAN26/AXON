@@ -3,6 +3,7 @@ import {
   buildProposal,
   classifyFile,
   DEFAULT_ANALYSIS_LIMITS,
+  diffProposalComponents,
   extractEvidence,
   type ArchitectureProposal,
   type RepositoryEvidence,
@@ -53,6 +54,58 @@ export class PullRequestService {
       .orderBy(desc(githubPrAnalysisRuns.createdAt));
   }
 
+  /**
+   * Fetches every supported file in `changed` at `sha`, runs the deterministic
+   * extractors, and returns the accumulated evidence. Bounded by the standard
+   * evidence/file limits; files that are unsupported, too large, or absent at
+   * this commit are skipped safely (never throwing the whole analysis). No repo
+   * code is executed — content is only parsed.
+   */
+  private async collectEvidence(
+    installationId: number,
+    ownerLogin: string,
+    repoName: string,
+    changed: { filename: string }[],
+    sha: string,
+  ): Promise<{ evidence: RepositoryEvidence[]; examined: number; hasInfrastructure: boolean }> {
+    const evidence: RepositoryEvidence[] = [];
+    let examined = 0;
+    let hasInfrastructure = false;
+    const MAX_CHANGED_FILES = 50;
+
+    for (const f of changed) {
+      if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence || examined >= MAX_CHANGED_FILES) {
+        break;
+      }
+      const classification = classifyFile(f.filename);
+      if (!classification.supported) continue;
+
+      let content: string;
+      try {
+        content = await this.gateway.getFileText(
+          installationId,
+          ownerLogin,
+          repoName,
+          f.filename,
+          sha,
+          DEFAULT_ANALYSIS_LIMITS.maxFileBytes,
+        );
+      } catch {
+        continue; // too large / unavailable / absent at this commit — skip safely
+      }
+      examined += 1;
+
+      const raw = extractEvidence(f.filename, classification.extractor, content);
+      for (const record of raw) {
+        if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence) break;
+        if (record.evidenceType === "infrastructure-declaration") hasInfrastructure = true;
+        evidence.push({ ...record, id: `${f.filename}#${String(evidence.length)}` });
+      }
+    }
+
+    return { evidence, examined, hasInfrastructure };
+  }
+
   async analyzePullRequest(repositoryConnectionId: string, prNumber: number) {
     // Fetch repository & installation details
     const repoRows = await this.db
@@ -99,54 +152,37 @@ export class PullRequestService {
       prNumber,
     );
 
-    // Analyze the changed files: fetch each supported, non-removed file at the
-    // head commit, run the deterministic extractors, and build an evidence-backed
-    // proposal. Every component/relationship therefore references changed
-    // evidence (real file paths + extracted facts), not a file extension guess.
-    const evidence: RepositoryEvidence[] = [];
-    let examined = 0;
-    let hasInfrastructure = false;
-    const MAX_CHANGED_FILES = 50;
+    // Build the architecture proposal at BOTH commits and diff them, so the
+    // impact reflects what the PR does to the architecture — components added,
+    // removed, or changed in confidence — not merely which files moved. Head
+    // evidence comes from every supported non-deleted file at the head commit;
+    // base evidence from every supported pre-existing file at the base commit.
+    // A deleted file that declared a component therefore surfaces as a removal.
+    const head = await this.collectEvidence(
+      installation.installationId,
+      repo.ownerLogin,
+      repo.name,
+      files.filter((f) => f.status !== "removed"),
+      headSha,
+    );
+    const base = await this.collectEvidence(
+      installation.installationId,
+      repo.ownerLogin,
+      repo.name,
+      files.filter((f) => f.status !== "added"),
+      baseSha,
+    );
 
-    for (const f of files) {
-      if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence || examined >= MAX_CHANGED_FILES) {
-        break;
-      }
-      if (f.status === "removed") continue;
-      const classification = classifyFile(f.filename);
-      if (!classification.supported) continue;
-
-      let content: string;
-      try {
-        content = await this.gateway.getFileText(
-          installation.installationId,
-          repo.ownerLogin,
-          repo.name,
-          f.filename,
-          headSha,
-          DEFAULT_ANALYSIS_LIMITS.maxFileBytes,
-        );
-      } catch {
-        continue; // too large / unavailable — skip safely
-      }
-      examined += 1;
-
-      const raw = extractEvidence(f.filename, classification.extractor, content);
-      for (const record of raw) {
-        if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence) break;
-        if (record.evidenceType === "infrastructure-declaration") hasInfrastructure = true;
-        evidence.push({ ...record, id: `${f.filename}#${String(evidence.length)}` });
-      }
-    }
-
-    const proposal: ArchitectureProposal = buildProposal(repo.fullName, headSha, evidence);
+    const proposal: ArchitectureProposal = buildProposal(repo.fullName, headSha, head.evidence);
+    const baseProposal: ArchitectureProposal = buildProposal(repo.fullName, baseSha, base.evidence);
+    const componentDiff = diffProposalComponents(baseProposal, proposal);
 
     // Risk derives from what actually changed (evidence), not file extensions.
-    const risk: ArchitectureRisk = hasInfrastructure
+    const risk: ArchitectureRisk = head.hasInfrastructure
       ? "high"
       : proposal.components.length > 0
         ? "medium"
-        : examined > 0
+        : head.examined > 0
           ? "low"
           : "none";
 
@@ -165,9 +201,9 @@ export class PullRequestService {
 
     const summary: PrImpactSummary = {
       risk,
-      addedComponentsCount: proposal.components.length,
-      removedComponentsCount: 0,
-      modifiedComponentsCount: proposal.relationships.length,
+      addedComponentsCount: componentDiff.added.length,
+      removedComponentsCount: componentDiff.removed.length,
+      modifiedComponentsCount: componentDiff.modified.length,
       conflictsCount: proposal.conflicts.length,
       unresolvedCount: proposal.unresolved.length,
       changedFilesCount: files.length,

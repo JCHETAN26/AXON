@@ -17,20 +17,28 @@ beforeEach(async () => {
   delete process.env.AXON_GITHUB_PR_OUTPUT_ENABLED;
 });
 
-/** A gateway with a fixed PR, changed-file list, and file contents. */
+const HEAD_SHA = "h7";
+
+/**
+ * A gateway with a fixed PR (head `h7`, base `b7`), changed-file list, and file
+ * contents. A content entry may be a plain string (identical at both commits) or
+ * `{ base, head }` to model a file whose content differs between base and head.
+ */
 function fakeGateway(
   files: { filename: string; status?: "added" | "modified" | "removed" | "renamed" }[],
-  contents: Record<string, string> = {},
+  contents: Record<string, string | { base?: string; head?: string }> = {},
 ): GithubGateway {
   return {
     verifyInstallation: vi.fn(),
     listInstallationRepositories: vi.fn(),
     getBranchHeadSha: vi.fn(),
     getTree: vi.fn(),
-    getFileText: vi.fn((_i, _o, _r, path: string) => {
-      const c = contents[path];
-      if (c === undefined) return Promise.reject(new GithubError("not-found"));
-      return Promise.resolve(c);
+    getFileText: vi.fn((_i, _o, _r, path: string, sha: string) => {
+      const entry = contents[path];
+      if (entry === undefined) return Promise.reject(new GithubError("not-found"));
+      const value = typeof entry === "string" ? entry : sha === HEAD_SHA ? entry.head : entry.base;
+      if (value === undefined) return Promise.reject(new GithubError("not-found"));
+      return Promise.resolve(value);
     }),
     listPullRequests: vi
       .fn()
@@ -87,8 +95,9 @@ async function seedRepo(email: string): Promise<{ userId: string; repoConnId: st
 describe("PullRequestService (real DB, evidence-based)", () => {
   it("extracts real evidence from changed files and derives risk from it", async () => {
     const { userId, repoConnId } = await seedRepo("a@example.com");
-    // A changed package.json that declares a PostgreSQL client.
-    const gateway = fakeGateway([{ filename: "package.json" }], {
+    // A newly added package.json that declares a PostgreSQL client — absent at
+    // base, so the whole component is introduced by the PR.
+    const gateway = fakeGateway([{ filename: "package.json", status: "added" }], {
       "package.json": JSON.stringify({ dependencies: { pg: "^8.0.0" } }),
     });
     const service = new PullRequestService(db, gateway, userId);
@@ -97,12 +106,54 @@ describe("PullRequestService (real DB, evidence-based)", () => {
     // The proposal is evidence-backed (not empty), and risk reflects real content.
     expect(proposal.components.length).toBeGreaterThanOrEqual(1);
     expect(summary.addedComponentsCount).toBe(proposal.components.length);
+    expect(summary.removedComponentsCount).toBe(0);
     expect(summary.risk).toBe("medium");
     // Every component cites evidence.
     expect(proposal.components.every((c) => c.evidenceIds.length > 0)).toBe(true);
 
     const runs = await service.listPullRequestRuns(repoConnId);
     expect(runs).toHaveLength(1);
+  });
+
+  it("reports a component only present at base as removed by the PR", async () => {
+    const { userId, repoConnId } = await seedRepo("a@example.com");
+    // package.json (with a PostgreSQL client) is deleted in the PR: present at
+    // base, gone at head — so the architecture loses a component.
+    const gateway = fakeGateway([{ filename: "package.json", status: "removed" }], {
+      "package.json": JSON.stringify({ dependencies: { pg: "^8.0.0" } }),
+    });
+    const service = new PullRequestService(db, gateway, userId);
+
+    const { summary, proposal } = await service.analyzePullRequest(repoConnId, 7);
+    expect(proposal.components).toHaveLength(0); // nothing at head
+    expect(summary.addedComponentsCount).toBe(0);
+    expect(summary.removedComponentsCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("counts a component that a modified file introduces at head as added", async () => {
+    const { userId, repoConnId } = await seedRepo("a@example.com");
+    // The same file is modified: no dependency at base, a PostgreSQL client at
+    // head. Both commits are analyzed; only head yields the component.
+    const gateway = fakeGateway([{ filename: "package.json", status: "modified" }], {
+      "package.json": {
+        base: JSON.stringify({ dependencies: {} }),
+        head: JSON.stringify({ dependencies: { pg: "^8.0.0" } }),
+      },
+    });
+    const service = new PullRequestService(db, gateway, userId);
+
+    const { summary } = await service.analyzePullRequest(repoConnId, 7);
+    expect(summary.addedComponentsCount).toBeGreaterThanOrEqual(1);
+    expect(summary.removedComponentsCount).toBe(0);
+    // The base commit was actually fetched (base↔head, not head-only).
+    expect(gateway.getFileText).toHaveBeenCalledWith(
+      expect.anything(),
+      "org",
+      "repo",
+      "package.json",
+      "b7",
+      expect.anything(),
+    );
   });
 
   it("rates a PR with no supported changes as no-risk with an empty proposal", async () => {

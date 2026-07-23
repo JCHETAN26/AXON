@@ -31,10 +31,12 @@
 >   `db:migrate` uses `scripts/migrate.ts` — see `docs/ops/migrations.md`).
 >   Live schema matches the code (35 public tables).
 > - **Checkpoint 8**: webhook + HMAC signature + delivery dedup + PG-backed jobs,
->   **plus** evidence-based PR analysis (extractors run on changed files → real
->   proposal), a job dispatcher (`webhook-processor`), and disabled-by-default
->   GitHub write-back are all built and tested. Remaining: a job **scheduler**
->   invokes `drainWebhookJobs`, and a full base↔head semantic diff → **IN_PROGRESS**.
+>   **plus** evidence-based PR analysis, a job dispatcher (`webhook-processor`),
+>   disabled-by-default GitHub write-back, a scheduler-triggered drain endpoint
+>   (`POST /api/jobs/drain`, bearer-secret auth), and a base↔head architecture
+>   diff (the PR impact now reports components genuinely added/removed/modified,
+>   analyzing both commits) are all built and tested. Remaining: a live
+>   end-to-end PR run against the GitHub App (manual gate) → **IN_PROGRESS**.
 > - **Checkpoint 11**: calibration now reads the **ingested** telemetry metrics
 >   (no more mock samples). Remaining: telemetry UI + live-source manual gate.
 > - **Checkpoint 10** still uses **hardcoded mock cloud assets** (no real cloud
@@ -57,7 +59,7 @@
 | 5 | MANUAL_VALIDATION_REQUIRED | GitHub Repository Intelligence — full connect→analyze→proposal→review→apply loop + data lifecycle built, integration-tested, review-UI states/a11y + data-handling docs done. Remaining gate: live GitHub-App fixture-repo run + visual review |
 | 6 | AUTOMATED_VALIDATION_PASSING | Terraform & Kubernetes intelligence (deterministic logic; workspace/DB flow not fully verified) |
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
-| 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + job dispatch + gated GitHub output all done; job scheduler + full base/head diff remain |
+| 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + gated GitHub output + scheduler-triggered drain endpoint + base↔head architecture diff (added/removed/modified components) all done and tested; live end-to-end PR run is a manual gate |
 | 9 | AUTOMATED_VALIDATION_PASSING | AWS-to-GCP migration workspace (deterministic catalog/engine) |
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
 | 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (calibration now uses ingested metrics; UI + live-source manual gate remain) |

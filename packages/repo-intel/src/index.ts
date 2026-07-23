@@ -4,6 +4,7 @@ export * from "./limits";
 export * from "./tech-catalog";
 export * from "./extractors/index";
 export * from "./proposal";
+export * from "./proposal-diff";
 export * from "./terraform/hcl-parser";
 export * from "./terraform/catalog";
 export * from "./terraform/relationships";
