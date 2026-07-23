@@ -69,7 +69,7 @@
 | 15 | IN_PROGRESS | Visual Architecture Studio (icon registry foundation started) |
 | 16 | IN_PROGRESS | Full multi-cloud workspace (curated planner + first UI slice) |
 | 17 | IN_PROGRESS | Collaboration, sharing, and presentation (permission/share-link foundation) |
-| 18 | IN_PROGRESS | Grounded architecture copilot (grounding contract foundation) |
+| 18 | IN_PROGRESS | Grounded architecture copilot — keyword-overlap grounding now answers real natural-language questions (was substring-only, near-non-functional), cites components/findings, refuses without grounding, and provably never answers from untrusted evidence snippets; retrieval-to-answer + provider wiring remain |
 | 19 | IN_PROGRESS | Benchmarks, security, and scale (versioned benchmark corpus foundation) |
 | 20 | IN_PROGRESS | Production release and launch (release-readiness gate classifier) |
 

@@ -38,6 +38,57 @@ function normalize(value: string): string {
     .trim();
 }
 
+// Question words that carry no grounding signal; dropped before matching so a
+// natural question ("what database do we use?") keys off "database", not "what".
+const STOPWORDS = new Set([
+  "a", "an", "the", "is", "are", "am", "be", "do", "does", "did", "we", "our",
+  "us", "my", "me", "i", "you", "your", "of", "in", "on", "at", "to", "and",
+  "or", "how", "what", "which", "who", "whom", "where", "when", "why", "use",
+  "using", "used", "have", "has", "had", "with", "for", "this", "that", "it",
+  "its", "there", "here", "many", "much", "any", "some", "get", "should",
+  "would", "could", "can", "will", "was", "were", "about", "into", "from",
+  "does", "so", "if", "then", "than", "as",
+]);
+
+/** Extracts meaningful lowercase keyword tokens from free text. */
+function keywords(text: string): string[] {
+  return normalize(text)
+    .split(" ")
+    .filter((token) => token.length > 1 && !STOPWORDS.has(token));
+}
+
+/** Loose token equality: exact, or one contains the other when long enough to
+ * be meaningful (so "databases" ↔ "database", "postgres" ↔ "postgresql"). */
+function tokenMatches(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length >= 4 && b.includes(a)) return true;
+  if (b.length >= 4 && a.includes(b)) return true;
+  return false;
+}
+
+/** How many of the question's keywords appear among the target's tokens. */
+function overlapScore(questionTokens: readonly string[], targetText: string): number {
+  const targetTokens = normalize(targetText).split(" ").filter((t) => t.length > 0);
+  let score = 0;
+  for (const q of questionTokens) {
+    if (targetTokens.some((t) => tokenMatches(q, t))) score += 1;
+  }
+  return score;
+}
+
+function bestMatch<T>(
+  items: readonly T[],
+  questionTokens: readonly string[],
+  targetText: (item: T) => string,
+): { item: T; score: number } | null {
+  let best: { item: T; score: number } | null = null;
+  for (const item of items) {
+    const score = overlapScore(questionTokens, targetText(item));
+    if (score > 0 && (best === null || score > best.score)) best = { item, score };
+  }
+  return best;
+}
+
 function componentCitation(projectId: string, id: string, label: string): CopilotCitation {
   return {
     kind: "component",
@@ -60,28 +111,28 @@ export function answerGroundedArchitectureQuestion(
   question: string,
   context: CopilotGroundingContext,
 ): GroundedCopilotAnswer {
-  const normalizedQuestion = normalize(question);
-  const matchingComponents = context.document.nodes.filter((node) =>
-    normalize([node.id, node.name, node.category, node.meta ?? ""].join(" ")).includes(
-      normalizedQuestion,
-    ),
-  );
-  const matchingFindings =
-    context.findings?.filter((finding) =>
-      normalize(
-        [
-          finding.fingerprint,
-          finding.ruleId,
-          finding.title,
-          finding.detected,
-          finding.severity,
-        ].join(" "),
-      ).includes(normalizedQuestion),
-    ) ?? [];
+  // Match on keyword overlap, not whole-question substring — so real questions
+  // ("what database do we use?") ground against the relevant component or
+  // finding. Untrusted evidence snippets are deliberately NOT part of matching
+  // or output: retrieved repo/telemetry text can never supply an answer or an
+  // instruction, only be counted as ignored.
+  const questionTokens = keywords(question);
 
-  if (matchingComponents.length > 0) {
-    const component = matchingComponents[0];
-    if (component === undefined) throw new Error("Matched component unexpectedly missing.");
+  const componentMatch = bestMatch(context.document.nodes, questionTokens, (node) =>
+    [node.id, node.name, node.category, node.meta ?? ""].join(" "),
+  );
+  const findingMatch = bestMatch(context.findings ?? [], questionTokens, (finding) =>
+    [finding.ruleId, finding.title, finding.detected, finding.severity].join(" "),
+  );
+
+  // Prefer whichever grounded source matches the question more strongly; on a
+  // tie prefer the concrete architecture component.
+  const preferComponent =
+    componentMatch !== null &&
+    (findingMatch === null || componentMatch.score >= findingMatch.score);
+
+  if (preferComponent && componentMatch !== null) {
+    const component = componentMatch.item;
     return {
       directAnswer: `${component.name} is represented as a ${component.category} component in the current architecture document.`,
       citations: [componentCitation(context.document.projectId, component.id, component.name)],
@@ -97,9 +148,8 @@ export function answerGroundedArchitectureQuestion(
     };
   }
 
-  if (matchingFindings.length > 0) {
-    const finding = matchingFindings[0];
-    if (finding === undefined) throw new Error("Matched finding unexpectedly missing.");
+  if (findingMatch !== null) {
+    const finding = findingMatch.item;
     return {
       directAnswer: `${finding.title} is currently ${finding.severity} severity: ${finding.detected}`,
       citations: [findingCitation(context.document.projectId, finding)],
