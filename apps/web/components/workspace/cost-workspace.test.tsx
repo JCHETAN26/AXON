@@ -22,6 +22,10 @@ function fixtureDocument() {
 
 describe("CostWorkspace", () => {
   beforeEach(() => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:cost-export");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation((url) => {
+      expect(url).toBeTruthy();
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string | URL | Request) => {
@@ -124,5 +128,33 @@ describe("CostWorkspace", () => {
       ),
     );
     expect(await screen.findByText("Usage assumptions saved.")).toBeInTheDocument();
+  });
+
+  it("exports the current modeled estimate as JSON", async () => {
+    const click = vi.fn();
+    const anchorState = { href: "", download: "" };
+    const blobSpy = vi.spyOn(globalThis, "Blob");
+
+    render(<CostWorkspace document={fixtureDocument()} />);
+    const createElement = vi.spyOn(document, "createElement");
+    createElement.mockReturnValue({
+      click,
+      set href(value: string) {
+        anchorState.href = value;
+      },
+      set download(value: string) {
+        anchorState.download = value;
+      },
+    } as unknown as HTMLAnchorElement);
+    await userEvent.click(screen.getByRole("button", { name: "Export JSON" }));
+
+    expect(click).toHaveBeenCalled();
+    expect(anchorState).toMatchObject({
+      href: "blob:cost-export",
+      download: "project-cost-cost-estimate.json",
+    });
+    const blobParts = blobSpy.mock.calls[0]?.[0] as string[] | undefined;
+    expect(blobParts?.[0]).toContain("\"schemaVersion\": \"axon.cost-export.v1\"");
+    expect(blobParts?.[0]).toContain("\"projectId\": \"project-cost\"");
   });
 });

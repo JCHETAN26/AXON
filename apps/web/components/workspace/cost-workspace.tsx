@@ -34,6 +34,15 @@ function money(value: number): string {
   }).format(value);
 }
 
+function downloadTextFile(filename: string, contents: string, mimeType: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function CostWorkspace({ document }: CostWorkspaceProps) {
   const [history, setHistory] = useState<CostHistoryItem[]>([]);
   const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "ready" | "error">(
@@ -194,6 +203,33 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
     }
   }, [estimateUrl, loadHistory, usageProfile.drivers]);
 
+  const exportEstimate = useCallback(() => {
+    downloadTextFile(
+      `${document.projectId}-cost-estimate.json`,
+      JSON.stringify(
+        {
+          schemaVersion: "axon.cost-export.v1",
+          projectId: document.projectId,
+          documentId: document.id,
+          exportedAt: new Date().toISOString(),
+          provider: "aws",
+          region: "us-east-1",
+          usageProfile,
+          estimate,
+          scaleProjections: scale,
+          providerComparison,
+          limitations: [
+            "Modeled estimate from AXON deterministic inputs; not a provider invoice.",
+            ...estimate.limitations,
+          ],
+        },
+        null,
+        2,
+      ),
+      "application/json",
+    );
+  }, [document.id, document.projectId, estimate, providerComparison, scale, usageProfile]);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3 border-2 border-border-strong bg-surface p-4">
@@ -214,6 +250,9 @@ export function CostWorkspace({ document }: CostWorkspaceProps) {
           disabled={saveStatus === "saving"}
         >
           {saveStatus === "saving" ? "Saving" : "Save estimate"}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={exportEstimate}>
+          Export JSON
         </Button>
       </div>
 

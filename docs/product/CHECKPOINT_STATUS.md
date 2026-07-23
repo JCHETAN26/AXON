@@ -387,6 +387,9 @@
     Explorer controls for monthly usage inputs. User edits are labeled
     `user-supplied`, update the deterministic estimate immediately, can be
     saved independently, and are reused when saving estimate runs.
+  - Added deterministic Cost Explorer JSON export for the current modeled
+    estimate, usage assumptions, scale projections, provider comparison,
+    catalog metadata, and invoice limitations.
   - Targeted automated gates pass:
     `pnpm --filter @axon/architecture-cost test` (9 tests),
     `pnpm --filter @axon/architecture-cost typecheck`,
@@ -398,8 +401,9 @@
     `pnpm --filter @axon/web typecheck`, and
     `pnpm --filter @axon/web lint`.
 - **Known gaps**:
-  - Cost Explorer UI supports editable monthly assumptions, but richer
-    historical comparison and export workflows are not complete.
+  - Cost Explorer UI supports editable monthly assumptions and JSON export, but
+    richer historical comparison and CSV/report export workflows are not
+    complete.
   - Cost persistence stores usage assumptions and estimate runs, but catalog
     records themselves are not yet persisted/refreshable.
   - The initial catalog is an offline deterministic test catalog, not a live
