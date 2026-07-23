@@ -12,7 +12,7 @@ const nonEmptyString = z.string().min(1);
 const isoDateTime = z.iso.datetime();
 
 export const ArchitectureSourceSchema = z.object({
-  kind: z.enum(["manual", "generated", "imported", "sample"]),
+  kind: z.enum(["manual", "generated", "imported", "sample", "repository"]),
   /** Human-readable origin, e.g. "Sample: SaaS reference architecture". */
   label: nonEmptyString.optional(),
 });
