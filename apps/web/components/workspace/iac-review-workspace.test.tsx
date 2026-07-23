@@ -87,4 +87,36 @@ describe("IaCReviewWorkspace", () => {
     await user.click(screen.getByRole("tab", { name: "CURRENT" }));
     await user.click(screen.getByRole("tab", { name: "DIFF" }));
   });
+
+  it("shows an empty state and disables apply when the proposal has no components", () => {
+    renderWorkspace({ proposal: { ...PROPOSAL, components: [] } });
+    expect(screen.getByText(/no architecture components/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: /APPLY 0 ACCEPTED/ })).toBeDisabled();
+  });
+
+  it("keeps apply disabled until at least one component is accepted", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    expect(screen.getByRole("button", { name: /APPLY 0 ACCEPTED/ })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /AWS RDS PostgreSQL/ }));
+    await user.click(screen.getByRole("button", { name: "ACCEPT" }));
+    expect(screen.getByRole("button", { name: /APPLY 1 ACCEPTED/ })).toBeEnabled();
+  });
+
+  it("surfaces a revision-conflict alert without losing the review when apply fails", async () => {
+    const user = userEvent.setup();
+    const onApplyProposal = vi.fn().mockRejectedValue(
+      new Error("The project was modified by another write. Reload and try again."),
+    );
+    renderWorkspace({ onApplyProposal });
+
+    await user.click(screen.getByRole("button", { name: /AWS RDS PostgreSQL/ }));
+    await user.click(screen.getByRole("button", { name: "ACCEPT" }));
+    await user.click(screen.getByRole("button", { name: /APPLY 1 ACCEPTED/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/changed elsewhere/i);
+    // The accepted review is preserved (apply is still available to retry).
+    expect(screen.getByRole("button", { name: /APPLY 1 ACCEPTED/ })).toBeEnabled();
+  });
 });

@@ -50,7 +50,7 @@
 | 2 | AUTOMATED_VALIDATION_PASSING | Deterministic audit & finding model |
 | 3 | AUTOMATED_VALIDATION_PASSING | Traffic & failure simulation engine |
 | 4 | AUTOMATED_VALIDATION_PASSING | Proposal review & Current/Proposed/Diff |
-| 5 | IN_PROGRESS | GitHub Repository Intelligence — connect→analyze→proposal→apply loop built + real-DB integration-tested (concurrency-safe apply); lifecycle export/deletion/disconnect tested. Remaining: review-UI states + Phase D docs |
+| 5 | MANUAL_VALIDATION_REQUIRED | GitHub Repository Intelligence — full connect→analyze→proposal→review→apply loop + data lifecycle built, integration-tested, review-UI states/a11y + data-handling docs done. Remaining gate: live GitHub-App fixture-repo run + visual review |
 | 6 | AUTOMATED_VALIDATION_PASSING | Terraform & Kubernetes intelligence (deterministic logic; workspace/DB flow not fully verified) |
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
 | 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + job dispatch + gated GitHub output all done; job scheduler + full base/head diff remain |
@@ -105,7 +105,7 @@
 
 ## Checkpoint 5 — GitHub Repository Intelligence Foundation
 
-- **Status**: `IN_PROGRESS`
+- **Status**: `MANUAL_VALIDATION_REQUIRED`
 - **Done + verified**:
   - Phase A — GitHub App config, single-use install state, owner-scoped
     connection repository, install flow, `/settings/connections`.
@@ -121,8 +121,15 @@
     metadata (no tokens/keys); account deletion **cascades** all repo data;
     disconnecting a repo removes its analysis lineage but **preserves applied
     documents**. All three integration-tested.
-- **Remaining**: repository review-UI states (loading/empty/error, a11y, 390px)
-  and Phase D documentation; manual fixture-repo validation (§6.12).
+  - Review UI — `iac-review-workspace` has populated/empty/error states, an
+    apply-conflict alert (revision conflict surfaced, review preserved),
+    accept/reject + apply-gating, and accessible tablist/tab/alert semantics.
+    Data-handling page documents repo analysis (static, no source stored, tokens
+    never persisted, disconnect/deletion behavior).
+- **Remaining (manual gate only)**: a live GitHub-App run against a non-sensitive
+  fixture repository (§6.12) and visual review across viewports/themes. All
+  automated validation — typecheck, lint, full test suite, build, bundle scan —
+  passes.
 
 ## Checkpoint 6 — Terraform and Kubernetes Intelligence
 

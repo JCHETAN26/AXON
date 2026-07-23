@@ -26,6 +26,7 @@ export function IaCReviewWorkspace({
   );
   const [viewTab, setViewTab] = useState<ViewTab>("proposed");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const selectedComponent = currentProposal.components.find((c) => c.id === selectedComponentId);
 
@@ -43,10 +44,21 @@ export function IaCReviewWorkspace({
     }));
   };
 
+  const acceptedCount = currentProposal.components.filter((c) => c.review === "accepted").length;
+
   const handleApply = async () => {
     setBusy(true);
+    setError(null);
     try {
       await onApplyProposal(currentProposal);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      // A revision conflict means the architecture changed elsewhere.
+      setError(
+        /modified by another write|conflict/i.test(message)
+          ? "This architecture changed elsewhere since you opened this proposal. Reload the latest version before applying."
+          : "The proposal could not be applied. Your review is preserved — try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -74,14 +86,25 @@ export function IaCReviewWorkspace({
           </StatusBadge>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || acceptedCount === 0}
             onClick={handleApply}
-            className="type-label-caps bg-primary px-4 py-2 text-primary-foreground transition-all hover:bg-accent focus-visible:outline-2 focus-visible:outline-accent"
+            className="type-label-caps bg-primary px-4 py-2 text-primary-foreground transition-all hover:bg-accent focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy ? "APPLYING..." : "APPLY REVIEWED PROPOSAL"}
+            {busy ? "APPLYING..." : `APPLY ${String(acceptedCount)} ACCEPTED`}
           </button>
         </div>
       </div>
+
+      {error !== null && (
+        <p role="alert" className="type-body-md border-l-2 border-critical bg-critical-muted px-4 py-3">
+          {error}
+        </p>
+      )}
+      {acceptedCount === 0 && currentProposal.components.length > 0 && (
+        <p className="type-body-md text-foreground-muted">
+          Accept at least one proposed component to apply it to your architecture.
+        </p>
+      )}
 
       {/* Main Review Grid */}
       <div className="flex flex-col gap-6 xl:flex-row">
@@ -91,6 +114,13 @@ export function IaCReviewWorkspace({
             <h3 className="type-label-caps text-foreground-muted">
               Proposed Components ({currentProposal.components.length})
             </h3>
+
+            {currentProposal.components.length === 0 && (
+              <p className="type-body-md mt-3 text-foreground-muted">
+                This analysis produced no architecture components from the supported files in this
+                commit. Nothing to review or apply.
+              </p>
+            )}
 
             <ul className="mt-3 flex flex-col gap-2">
               {currentProposal.components.map((component) => (

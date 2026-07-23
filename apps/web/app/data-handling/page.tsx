@@ -27,6 +27,22 @@ export default function DataHandlingPage() {
           latest runs, and Compose import drafts are stored server-side, scoped to your account.
         </p>
       </LegalSection>
+      <LegalSection heading="GitHub repository analysis">
+        <p>
+          If you connect repositories through the AXON GitHub App, analysis is static and bounded —
+          AXON never executes your code, installs dependencies, or runs Docker, Terraform, or
+          Kubernetes tooling. It reads only the supported files it needs and stores structured
+          <em> evidence</em> (technology names, file paths, and safe redacted excerpts) plus the
+          proposals derived from them. Raw source files are not stored, and secret values are
+          redacted — only secret-reference names are ever kept.
+        </p>
+        <p>
+          Short-lived GitHub installation tokens are minted server-side per request and are never
+          stored; the GitHub App private key is server-only. Disconnecting a repository removes its
+          analysis runs, evidence, and proposals while preserving any architecture you already
+          applied. Account deletion removes all of it.
+        </p>
+      </LegalSection>
       <LegalSection heading="Feedback">
         <p>
           Feedback is stored with your account identity and a category. It is not attached to any
