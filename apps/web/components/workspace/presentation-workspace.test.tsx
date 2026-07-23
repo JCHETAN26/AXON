@@ -1,6 +1,6 @@
 import { ThemeProvider } from "@axon/ui";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { PresentationWorkspace } from "./presentation-workspace";
 import { createSampleArchitectureDocument } from "@/lib/projects/sample-project";
@@ -12,6 +12,10 @@ const DOCUMENT = createSampleArchitectureDocument({
 });
 
 describe("PresentationWorkspace", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("renders a read-only architecture walkthrough", () => {
     render(
       <ThemeProvider>
@@ -26,6 +30,8 @@ describe("PresentationWorkspace", () => {
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Export Walkthrough HTML" })).toBeVisible();
+    expect(screen.getByText("LOADING_NOTES")).toBeVisible();
+    expect(screen.getByLabelText("Speaker Notes")).toBeVisible();
   });
 
   it("advances through generated presentation steps", async () => {
@@ -45,5 +51,24 @@ describe("PresentationWorkspace", () => {
     await user.click(screen.getByRole("tab", { name: "14" }));
     expect(screen.getByRole("heading", { name: "Model Inputs" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+
+  it("saves speaker notes for generated steps", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <ThemeProvider>
+        <PresentationWorkspace document={DOCUMENT} />
+      </ThemeProvider>,
+    );
+
+    await user.type(await screen.findByLabelText("Speaker Notes"), "Open with the reliability story.");
+    await user.click(screen.getByRole("button", { name: "Save Notes" }));
+
+    expect(await screen.findByText("NOTES_SAVED")).toBeVisible();
+    expect(window.localStorage.getItem("axon.presentation.v1.project-1")).toContain(
+      "Open with the reliability story.",
+    );
   });
 });

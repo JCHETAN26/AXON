@@ -10,6 +10,10 @@ export interface PresentationStep {
   readonly bullets: readonly string[];
 }
 
+export interface PresentationRenderOptions {
+  readonly speakerNotesByStepId?: Readonly<Record<string, string>>;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -89,14 +93,21 @@ export function buildPresentationSteps(document: ArchitectureDocument): Presenta
   return [overview, ...groupSteps, ...flowSteps, assumptionStep];
 }
 
-export function renderPresentationHtml(document: ArchitectureDocument): string {
+export function renderPresentationHtml(
+  document: ArchitectureDocument,
+  options: PresentationRenderOptions = {},
+): string {
   const svg = renderArchitectureSvg(document);
   const steps = buildPresentationSteps(document);
   const stepMarkup = steps
-    .map(
-      (step, index) =>
-        `<article id="${escapeHtml(step.id)}"><p class="eyebrow">Step ${index + 1} · ${escapeHtml(step.eyebrow)}</p><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.summary)}</p><ul>${step.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}</ul></article>`,
-    )
+    .map((step, index) => {
+      const speakerNotes = options.speakerNotesByStepId?.[step.id]?.trim();
+      const notesMarkup =
+        speakerNotes === undefined || speakerNotes.length === 0
+          ? ""
+          : `<section class="notes" aria-label="Speaker notes"><p class="eyebrow">Speaker notes</p><p>${escapeHtml(speakerNotes)}</p></section>`;
+      return `<article id="${escapeHtml(step.id)}"><p class="eyebrow">Step ${index + 1} · ${escapeHtml(step.eyebrow)}</p><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.summary)}</p><ul>${step.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}</ul>${notesMarkup}</article>`;
+    })
     .join("");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(document.name)} presentation export</title><style>:root{color-scheme:light dark;font-family:Inter,system-ui,sans-serif;background:Canvas;color:CanvasText}body{margin:0;padding:32px}main{display:grid;gap:28px}header{border-bottom:2px solid CanvasText;padding-bottom:16px}.meta,.eyebrow{font:12px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;opacity:.72}h1{font-size:32px;line-height:1.1;margin:0}h2{font-size:22px;line-height:1.2;margin:8px 0}p{max-width:76ch;line-height:1.5}figure{margin:0;overflow:auto;border:2px solid CanvasText;padding:16px}.steps{display:grid;gap:16px}article{border-top:1px solid color-mix(in srgb,CanvasText 25%,transparent);padding-top:16px}ul{display:grid;gap:8px;margin:12px 0 0;padding-left:20px}</style></head><body><main><header><p class="meta">AXON presentation export · schema v${escapeHtml(document.schemaVersion)} · ${escapeHtml(document.updatedAt)}</p><h1>${escapeHtml(document.name)}</h1></header><figure>${svg}</figure><section class="steps" aria-label="Presentation walkthrough">${stepMarkup}</section></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(document.name)} presentation export</title><style>:root{color-scheme:light dark;font-family:Inter,system-ui,sans-serif;background:Canvas;color:CanvasText}body{margin:0;padding:32px}main{display:grid;gap:28px}header{border-bottom:2px solid CanvasText;padding-bottom:16px}.meta,.eyebrow{font:12px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;opacity:.72}h1{font-size:32px;line-height:1.1;margin:0}h2{font-size:22px;line-height:1.2;margin:8px 0}p{max-width:76ch;line-height:1.5}figure{margin:0;overflow:auto;border:2px solid CanvasText;padding:16px}.steps{display:grid;gap:16px}article{border-top:1px solid color-mix(in srgb,CanvasText 25%,transparent);padding-top:16px}.notes{border-left:3px solid color-mix(in srgb,CanvasText 40%,transparent);margin-top:14px;padding-left:14px}ul{display:grid;gap:8px;margin:12px 0 0;padding-left:20px}</style></head><body><main><header><p class="meta">AXON presentation export · schema v${escapeHtml(document.schemaVersion)} · ${escapeHtml(document.updatedAt)}</p><h1>${escapeHtml(document.name)}</h1></header><figure>${svg}</figure><section class="steps" aria-label="Presentation walkthrough">${stepMarkup}</section></main></body></html>`;
 }

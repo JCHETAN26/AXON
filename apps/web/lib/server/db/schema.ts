@@ -633,6 +633,7 @@ export const ARTIFACT_KINDS = [
   "import",
   "copilot",
   "multicloud",
+  "presentation",
 ] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 

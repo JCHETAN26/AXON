@@ -35,6 +35,18 @@ describe("renderPresentationHtml", () => {
     expect(html).toContain("Model Inputs");
   });
 
+  it("includes escaped speaker notes when provided", () => {
+    const html = renderPresentationHtml(DOCUMENT, {
+      speakerNotesByStepId: {
+        overview: "Open with <why this matters> & keep it short.",
+      },
+    });
+
+    expect(html).toContain("Speaker notes");
+    expect(html).toContain("Open with &lt;why this matters&gt; &amp; keep it short.");
+    expect(html).not.toContain("<why this matters>");
+  });
+
   it("escapes document and step content", () => {
     const html = renderPresentationHtml({
       ...DOCUMENT,

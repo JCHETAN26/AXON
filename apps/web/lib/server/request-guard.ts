@@ -35,6 +35,7 @@ export const PAYLOAD_LIMITS = {
   auditBytes: 2_000_000,
   copilotBytes: 1_000_000,
   multicloudBytes: 500_000,
+  presentationBytes: 500_000,
   recommendationBytes: 1_000_000,
   simulationBytes: 1_000_000,
   importDraftBytes: 1_100_000,

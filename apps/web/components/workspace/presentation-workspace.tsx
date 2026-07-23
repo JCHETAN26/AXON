@@ -2,7 +2,7 @@
 
 import { type ArchitectureDocument } from "@axon/diagram-schema";
 import { Button, cx } from "@axon/ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ReadOnlyArchitectureCanvas } from "@/components/canvas/read-only-architecture-canvas";
 import {
@@ -10,6 +10,11 @@ import {
   renderPresentationHtml,
   type PresentationStep,
 } from "@/lib/canvas/presentation";
+import { getPresentationRepository } from "@/lib/presentation/get-presentation-repository";
+import {
+  PRESENTATION_STATE_SCHEMA_VERSION,
+  type PresentationState,
+} from "@/lib/presentation/presentation-state";
 
 function downloadTextFile(filename: string, contents: string, mimeType: string) {
   const url = URL.createObjectURL(new Blob([contents], { type: mimeType }));
@@ -33,6 +38,10 @@ function filenameSafe(value: string): string {
 export function PresentationWorkspace({ document }: { document: ArchitectureDocument }) {
   const steps = useMemo(() => buildPresentationSteps(document), [document]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [speakerNotesByStepId, setSpeakerNotesByStepId] = useState<Record<string, string>>({});
+  const [saveStatus, setSaveStatus] = useState<"loading" | "ready" | "saving" | "saved" | "error">(
+    "loading",
+  );
   const activeStep: PresentationStep = steps[activeIndex] ?? {
     id: "empty",
     eyebrow: "Overview",
@@ -40,6 +49,28 @@ export function PresentationWorkspace({ document }: { document: ArchitectureDocu
     summary: "No presentation steps are available for this architecture.",
     bullets: ["Add services, groups, flows, or assumptions to build a walkthrough."],
   };
+  const activeNote = speakerNotesByStepId[activeStep.id] ?? "";
+  const savedNoteCount = Object.values(speakerNotesByStepId).filter((note) => note.trim()).length;
+
+  useEffect(() => {
+    let cancelled = false;
+    setSaveStatus("loading");
+    void getPresentationRepository()
+      .getPresentationState(document.projectId)
+      .then((stored) => {
+        if (cancelled) return;
+        setSpeakerNotesByStepId(
+          stored !== null && stored.documentId === document.id ? stored.speakerNotesByStepId : {},
+        );
+        setSaveStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setSaveStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [document.id, document.projectId]);
 
   const goTo = (index: number) => {
     setActiveIndex(Math.min(Math.max(index, 0), steps.length - 1));
@@ -48,9 +79,40 @@ export function PresentationWorkspace({ document }: { document: ArchitectureDocu
   const exportPresentationHtml = () => {
     downloadTextFile(
       `${filenameSafe(document.name)}-presentation.html`,
-      renderPresentationHtml(document),
+      renderPresentationHtml(document, { speakerNotesByStepId }),
       "text/html;charset=utf-8",
     );
+  };
+
+  const updateActiveNote = (note: string) => {
+    setSpeakerNotesByStepId((current) => ({
+      ...current,
+      [activeStep.id]: note.slice(0, 2000),
+    }));
+    setSaveStatus("ready");
+  };
+
+  const saveNotes = async () => {
+    setSaveStatus("saving");
+    const trimmedNotes = Object.fromEntries(
+      Object.entries(speakerNotesByStepId)
+        .map(([stepId, note]) => [stepId, note.trim()] as const)
+        .filter(([, note]) => note.length > 0),
+    );
+    const state: PresentationState = {
+      schemaVersion: PRESENTATION_STATE_SCHEMA_VERSION,
+      projectId: document.projectId,
+      documentId: document.id,
+      speakerNotesByStepId: trimmedNotes,
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      await getPresentationRepository().savePresentationState(state);
+      setSpeakerNotesByStepId(trimmedNotes);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("error");
+    }
   };
 
   return (
@@ -65,6 +127,15 @@ export function PresentationWorkspace({ document }: { document: ArchitectureDocu
         <div className="flex flex-wrap items-center gap-3">
           <p className="type-mono-data text-foreground-muted">
             Step {activeIndex + 1} of {steps.length}
+          </p>
+          <p className={cx("type-mono-data", saveStatus === "error" ? "text-warning" : "text-foreground-muted")}>
+            {saveStatus === "saving"
+              ? "SAVING_NOTES"
+              : saveStatus === "saved"
+                ? "NOTES_SAVED"
+                : saveStatus === "loading"
+                  ? "LOADING_NOTES"
+                  : `${savedNoteCount} NOTE${savedNoteCount === 1 ? "" : "S"}`}
           </p>
           <Button variant="technical" size="sm" onClick={exportPresentationHtml}>
             Export Walkthrough HTML
@@ -94,7 +165,20 @@ export function PresentationWorkspace({ document }: { document: ArchitectureDocu
             ))}
           </ul>
 
-          <div className="mt-auto flex gap-2">
+          <label className="flex flex-col gap-2 border-t-2 border-border pt-4">
+            <span className="type-label-caps text-foreground-muted">Speaker Notes</span>
+            <textarea
+              className="min-h-28 border-2 border-border bg-surface p-3 type-body-sm text-foreground"
+              maxLength={2000}
+              value={activeNote}
+              onChange={(event) => {
+                updateActiveNote(event.currentTarget.value);
+              }}
+              placeholder="Private presenter notes for this step"
+            />
+          </label>
+
+          <div className="mt-auto flex flex-wrap gap-2">
             <Button
               variant="technical"
               size="sm"
@@ -114,6 +198,16 @@ export function PresentationWorkspace({ document }: { document: ArchitectureDocu
               disabled={activeIndex === steps.length - 1}
             >
               Next
+            </Button>
+            <Button
+              variant="technical"
+              size="sm"
+              onClick={() => {
+                void saveNotes();
+              }}
+              disabled={saveStatus === "saving"}
+            >
+              {saveStatus === "saving" ? "Saving" : "Save Notes"}
             </Button>
           </div>
         </aside>

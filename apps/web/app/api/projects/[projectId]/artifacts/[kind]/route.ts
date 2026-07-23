@@ -21,6 +21,7 @@ const ARTIFACT_LIMIT: Record<ArtifactKind, number> = {
   audit: PAYLOAD_LIMITS.auditBytes,
   copilot: PAYLOAD_LIMITS.copilotBytes,
   multicloud: PAYLOAD_LIMITS.multicloudBytes,
+  presentation: PAYLOAD_LIMITS.presentationBytes,
   recommendation: PAYLOAD_LIMITS.recommendationBytes,
   simulation: PAYLOAD_LIMITS.simulationBytes,
   import: PAYLOAD_LIMITS.importDraftBytes,

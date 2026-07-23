@@ -467,6 +467,10 @@
   - Added standalone Presentation Mode HTML export. The export embeds the
     deterministic architecture SVG plus the generated walkthrough steps and
     escapes document/step content for safe portable sharing.
+  - Added bounded presentation authoring through persisted per-step speaker
+    notes (`presentation` artifact kind). Notes are attached to generated
+    walkthrough steps, saved through the owner-scoped artifact store, and
+    included in standalone HTML export with escaping.
   - Added deterministic layout quality and benchmark helpers for synthetic
     10/50/100/500-node architecture documents. The report checks positioned
     node coverage, missing nodes, overlap pairs, left-to-right edge flow,
@@ -477,13 +481,14 @@
     `pnpm --filter @axon/ui typecheck`,
     `pnpm --filter @axon/ui lint`,
     `pnpm --filter @axon/diagram-schema test -- architecture-document`,
-    `pnpm --filter @axon/web test -- adapters export-svg architecture-icon-registry inspectors icon-registry-workspace presentation-workspace presentation workspace-shell layout-benchmark`,
+    `pnpm --filter @axon/web test -- adapters export-svg architecture-icon-registry inspectors icon-registry-workspace presentation-workspace presentation artifacts workspace-shell layout-benchmark`,
     `pnpm --filter @axon/web typecheck`, and
     `pnpm --filter @axon/web lint`.
 - **Known gaps**:
   - Official provider icon ingestion, licensing documentation for real assets,
-    editing upgrades, PDF export/share links, richer presentation authoring,
-    browser-rendered performance traces, and manual visual QA are not complete.
+    editing upgrades, PDF export/share links, richer deck authoring beyond
+    speaker notes, browser-rendered performance traces, and manual visual QA are
+    not complete.
 
 ## Checkpoint 16 — Full Multi-Cloud Workspace
 
