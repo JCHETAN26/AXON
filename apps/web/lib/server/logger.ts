@@ -22,6 +22,8 @@ export interface SafeLogFields {
   provider?: string;
   model?: string;
   tokenCount?: number;
+  /** A safe non-sensitive cardinality, e.g. number of background jobs drained. */
+  count?: number;
   status?: number;
 }
 
@@ -35,6 +37,7 @@ const ALLOWED_KEYS: readonly (keyof SafeLogFields)[] = [
   "provider",
   "model",
   "tokenCount",
+  "count",
   "status",
 ];
 

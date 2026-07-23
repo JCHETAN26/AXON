@@ -57,6 +57,16 @@ describe("route-protection matrix", () => {
     expect(dev?.apiEnforced).toBe(true);
   });
 
+  it("marks the job-drain route as secret-enforced, session-free, and edge-public", () => {
+    const drain = ROUTE_MATRIX.find((route) => route.pattern === "/api/jobs/drain");
+    expect(drain?.class).toBe("cron");
+    expect(drain?.apiEnforced).toBe(true);
+    expect(drain?.proxyProtected).toBe(false);
+    // The scheduler has no session; the edge proxy must let it through so the
+    // route's own bearer-secret check is the sole gate.
+    expect(PROXY_PUBLIC_PREFIXES.some((prefix) => "/api/jobs/drain".startsWith(prefix))).toBe(true);
+  });
+
   it("marks share-link routes as token-enforced but not proxy protected", () => {
     for (const pattern of ["/share/[token]", "/api/share/[token]"]) {
       const entry = ROUTE_MATRIX.find((route) => route.pattern === pattern);

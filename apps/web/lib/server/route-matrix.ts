@@ -15,6 +15,7 @@ export type RouteClass =
   | "local-agent-api" // local agent bearer credential; no browser session required
   | "github-callback" // authenticated + beta; validates signed single-use state
   | "github-webhook" // public endpoint; authenticated by HMAC signature only
+  | "cron" // scheduler-triggered; authenticated by a shared bearer secret only
   | "internal-api" // dev/test only, fail-closed in production
   | "health" // public liveness/readiness
   | "static";
@@ -198,6 +199,14 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
     apiEnforced: true,
   },
 
+  // Scheduler-triggered queue drain, authenticated by a shared bearer secret.
+  {
+    pattern: "/api/jobs/drain",
+    class: "cron",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+
   {
     pattern: "/api/dev/seed-invite",
     class: "internal-api",
@@ -214,6 +223,7 @@ export const PROXY_PUBLIC_PREFIXES = [
   "/api/health",
   "/api/ready",
   "/api/github/webhook",
+  "/api/jobs/drain",
   "/api/share",
   "/share",
 ];
