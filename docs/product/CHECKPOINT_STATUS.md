@@ -62,7 +62,7 @@
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
 | 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (calibration now uses ingested metrics; UI + live-source manual gate remain) |
 | 12 | AUTOMATED_VALIDATION_PASSING | Controlled infrastructure PRs (codegen + DB verified; live PR creation is a manual gate) |
-| 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, and MCP tool subset exist; core scope remains partial) |
+| 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, MCP tool subset exist; pairing auth now hardened — atomic single-use claim with DB-side expiry, replay/revocation, real-DB tested; core scope remains partial) |
 | 14 | IN_PROGRESS | Cloud cost intelligence (deterministic cost model + MCP estimate tool; UI/persistence/manual gates incomplete) |
 | 15 | IN_PROGRESS | Visual Architecture Studio (icon registry foundation started) |
 | 16 | IN_PROGRESS | Full multi-cloud workspace (curated planner + first UI slice) |

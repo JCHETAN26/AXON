@@ -1,10 +1,11 @@
 import { eq, sql } from "drizzle-orm";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, it, expect, vi } from "vitest";
 
 import { LocalAgentService } from "./agent-service";
 import type { Database } from "../db/client";
 import { createTestDatabase, resetTestDatabase } from "../db/testing";
 import { localAgentConnections, users } from "../db/schema";
+import { seedUser } from "../test-support/seed";
 
 function mockDb() {
   return {
@@ -24,7 +25,9 @@ function mockDb() {
     }),
     update: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
       }),
     }),
   } as unknown as Database;
@@ -58,76 +61,6 @@ describe("LocalAgentService", () => {
     expect(result).toBeNull();
   });
 
-  it("validates an unused unexpired pairing token once", async () => {
-    const createdAt = new Date("2026-07-22T10:00:00Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-22T10:04:00Z"));
-    const db = mockDbWithValidationRows([
-      {
-        id: "agent-1",
-        ownerId: "user-1",
-        agentName: "Dev Laptop",
-        machineLabel: "laptop-mac",
-        workspaceScope: "project-1",
-        allowedCapabilities: ["analyze"],
-        lastConnectedAt: null,
-        revokedAt: null,
-        createdAt,
-      },
-    ]);
-    const service = new LocalAgentService(db, "user-1");
-
-    const result = await service.validateToken("axon_agent_test");
-
-    expect(result?.id).toBe("agent-1");
-    expect(result?.lastConnectedAt).toEqual(new Date("2026-07-22T10:04:00Z"));
-    expect(db.update).toHaveBeenCalled();
-  });
-
-  it("rejects expired pairing tokens", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-22T10:06:00Z"));
-    const db = mockDbWithValidationRows([
-      {
-        id: "agent-1",
-        ownerId: "user-1",
-        agentName: "Dev Laptop",
-        machineLabel: "laptop-mac",
-        workspaceScope: "project-1",
-        allowedCapabilities: [],
-        lastConnectedAt: null,
-        revokedAt: null,
-        createdAt: new Date("2026-07-22T10:00:00Z"),
-      },
-    ]);
-    const service = new LocalAgentService(db, "user-1");
-
-    await expect(service.validateToken("axon_agent_expired")).resolves.toBeNull();
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects replayed pairing tokens", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-22T10:01:00Z"));
-    const db = mockDbWithValidationRows([
-      {
-        id: "agent-1",
-        ownerId: "user-1",
-        agentName: "Dev Laptop",
-        machineLabel: "laptop-mac",
-        workspaceScope: "project-1",
-        allowedCapabilities: [],
-        lastConnectedAt: new Date("2026-07-22T10:00:30Z"),
-        revokedAt: null,
-        createdAt: new Date("2026-07-22T10:00:00Z"),
-      },
-    ]);
-    const service = new LocalAgentService(db, "user-1");
-
-    await expect(service.validateToken("axon_agent_replayed")).resolves.toBeNull();
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
   it("revokes agent connection", async () => {
     const db = mockDb();
     const service = new LocalAgentService(db, "user-1");
@@ -142,31 +75,6 @@ describe("LocalAgentService", () => {
 
     const agents = await service.listAgents();
     expect(Array.isArray(agents)).toBe(true);
-  });
-
-  it("exchanges a pairing token for a durable credential exactly once", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-22T10:04:00Z"));
-    const db = mockDbWithValidationRows([
-      {
-        id: "agent-1",
-        ownerId: "user-1",
-        agentName: "Dev Laptop",
-        machineLabel: "laptop-mac",
-        workspaceScope: "project-1",
-        allowedCapabilities: ["analyze"],
-        lastConnectedAt: null,
-        revokedAt: null,
-        createdAt: new Date("2026-07-22T10:00:00Z"),
-      },
-    ]);
-    const service = new LocalAgentService(db, "unused");
-
-    const result = await service.exchangePairingToken("agent-1", "axon_agent_test");
-
-    expect(result?.credential).toMatch(/^axon_agent_cred_[a-f0-9]{64}$/);
-    expect(result?.agent.ownerId).toBe("user-1");
-    expect(db.update).toHaveBeenCalled();
   });
 
   it("authenticates durable credentials without requiring a browser owner context", async () => {
@@ -275,6 +183,86 @@ describe("LocalAgentService with migrated database", () => {
     `);
     expect(columnCheck).toBeDefined();
   }, 15_000);
+});
+
+describe("CP13 pairing security (real DB)", () => {
+  let db: Database;
+  beforeAll(async () => {
+    db = await createTestDatabase();
+  });
+  beforeEach(async () => {
+    await resetTestDatabase(db);
+  });
+
+  async function newAgent(ownerEmail = "owner@example.com") {
+    const ownerId = await seedUser(db, ownerEmail);
+    const service = new LocalAgentService(db, ownerId);
+    const created = await service.createAgent({
+      agentName: "Dev Laptop",
+      machineLabel: "macbook",
+      workspaceScope: "project-1",
+    });
+    return { ownerId, service, created };
+  }
+
+  it("mints at most one credential when a pairing token is exchanged concurrently", async () => {
+    const { service, created } = await newAgent();
+
+    // Fire the same single-use token twice at once. The atomic compare-and-swap
+    // must let exactly one win — a TOCTOU read-then-update would let both.
+    const [a, b] = await Promise.all([
+      service.exchangePairingToken(created.agentId, created.token),
+      service.exchangePairingToken(created.agentId, created.token),
+    ]);
+
+    expect([a, b].filter((r) => r !== null)).toHaveLength(1);
+  });
+
+  it("rejects a replayed pairing token after a successful exchange", async () => {
+    const { service, created } = await newAgent();
+
+    expect(await service.exchangePairingToken(created.agentId, created.token)).not.toBeNull();
+    expect(await service.exchangePairingToken(created.agentId, created.token)).toBeNull();
+  });
+
+  it("rejects an expired pairing token and mints no credential", async () => {
+    const { service, created } = await newAgent();
+
+    // Age the pairing well past its 5-minute TTL using the DB clock (expiry is
+    // enforced DB-side, so faking the JS clock would not move it).
+    await db
+      .update(localAgentConnections)
+      .set({ createdAt: sql`now() - interval '1 hour'` })
+      .where(eq(localAgentConnections.id, created.agentId));
+
+    expect(await service.exchangePairingToken(created.agentId, created.token)).toBeNull();
+
+    const after = await db
+      .select({
+        credentialHash: localAgentConnections.credentialHash,
+        lastConnectedAt: localAgentConnections.lastConnectedAt,
+      })
+      .from(localAgentConnections)
+      .where(eq(localAgentConnections.id, created.agentId));
+    // The expired token is not consumed and mints nothing.
+    expect(after[0]?.credentialHash).toBeNull();
+    expect(after[0]?.lastConnectedAt).toBeNull();
+  });
+
+  it("rejects a revoked pairing token", async () => {
+    const { service, created } = await newAgent();
+    await service.revokeAgent(created.agentId);
+
+    expect(await service.exchangePairingToken(created.agentId, created.token)).toBeNull();
+  });
+
+  it("does not let another owner claim a pairing token via validateToken", async () => {
+    const { created } = await newAgent("owner-a@example.com");
+    const attackerId = await seedUser(db, "attacker@example.com");
+    const attacker = new LocalAgentService(db, attackerId);
+
+    expect(await attacker.validateToken(created.token)).toBeNull();
+  });
 });
 
 function mockDbWithValidationRows(rows: unknown[]) {

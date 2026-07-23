@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import { and, eq, isNull, desc } from "drizzle-orm";
+import { and, eq, isNull, desc, sql } from "drizzle-orm";
 
 import { type Database } from "../db/client";
 import { localAgentConnections } from "../db/schema";
@@ -9,6 +9,7 @@ const CREDENTIAL_PREFIX = "axon_agent_cred_";
 const TOKEN_BYTES = 32;
 const CREDENTIAL_BYTES = 32;
 const TOKEN_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for pairing
+const TOKEN_EXPIRY_SECONDS = TOKEN_EXPIRY_MS / 1000;
 
 export interface CreateAgentParams {
   agentName: string;
@@ -80,37 +81,34 @@ export class LocalAgentService {
    */
   async exchangePairingToken(agentId: string, token: string): Promise<AgentCredential | null> {
     const tokenHash = this.hashToken(token);
+    const connectedAt = new Date();
+    const credential = `${CREDENTIAL_PREFIX}${randomBytes(CREDENTIAL_BYTES).toString("hex")}`;
+    const credentialHash = this.hashToken(credential);
 
-    const rows = await this.db
-      .select()
-      .from(localAgentConnections)
+    // Atomic single-use claim: mint the credential and flip lastConnectedAt only
+    // if the row is still unclaimed (lastConnectedAt IS NULL), unrevoked, and
+    // unexpired — all evaluated in one statement, returning the row. This
+    // compare-and-swap is race-safe: of any number of concurrent replays exactly
+    // one matches and gets the row back; the losers get zero rows. Expiry uses the
+    // DB clock (`now()` vs the stored created_at) so no naive-`timestamp` value
+    // ever crosses the JS boundary, where the driver's local-zone parse would skew
+    // the comparison.
+    const claimed = await this.db
+      .update(localAgentConnections)
+      .set({ credentialHash, credentialIssuedAt: connectedAt, lastConnectedAt: connectedAt })
       .where(
         and(
           eq(localAgentConnections.id, agentId),
           eq(localAgentConnections.tokenHash, tokenHash),
           isNull(localAgentConnections.revokedAt),
+          isNull(localAgentConnections.lastConnectedAt),
+          sql`${localAgentConnections.createdAt} > now() - make_interval(secs => ${TOKEN_EXPIRY_SECONDS})`,
         ),
       )
-      .limit(1);
+      .returning();
 
-    const agent = rows[0];
+    const agent = claimed[0];
     if (!agent) return null;
-    if (agent.lastConnectedAt) return null;
-
-    const expiresAt = agent.createdAt.getTime() + TOKEN_EXPIRY_MS;
-    if (Date.now() > expiresAt) return null;
-
-    const credential = `${CREDENTIAL_PREFIX}${randomBytes(CREDENTIAL_BYTES).toString("hex")}`;
-    const credentialHash = this.hashToken(credential);
-    const connectedAt = new Date();
-    await this.db
-      .update(localAgentConnections)
-      .set({
-        credentialHash,
-        credentialIssuedAt: connectedAt,
-        lastConnectedAt: connectedAt,
-      })
-      .where(eq(localAgentConnections.id, agent.id));
 
     return {
       credential,
@@ -134,31 +132,27 @@ export class LocalAgentService {
    */
   async validateToken(token: string): Promise<AgentConnection | null> {
     const tokenHash = this.hashToken(token);
+    const connectedAt = new Date();
 
-    const rows = await this.db
-      .select()
-      .from(localAgentConnections)
+    // Same atomic single-use claim as exchangePairingToken, additionally scoped to
+    // this owner. Replay, revocation, and expiry are all enforced race-safely and
+    // DB-side in the WHERE clause so concurrent uses cannot both succeed.
+    const claimed = await this.db
+      .update(localAgentConnections)
+      .set({ lastConnectedAt: connectedAt })
       .where(
         and(
           eq(localAgentConnections.tokenHash, tokenHash),
           eq(localAgentConnections.ownerId, this.ownerId),
           isNull(localAgentConnections.revokedAt),
+          isNull(localAgentConnections.lastConnectedAt),
+          sql`${localAgentConnections.createdAt} > now() - make_interval(secs => ${TOKEN_EXPIRY_SECONDS})`,
         ),
       )
-      .limit(1);
+      .returning();
 
-    const agent = rows[0];
+    const agent = claimed[0];
     if (!agent) return null;
-    if (agent.lastConnectedAt) return null;
-
-    const expiresAt = agent.createdAt.getTime() + TOKEN_EXPIRY_MS;
-    if (Date.now() > expiresAt) return null;
-
-    const connectedAt = new Date();
-    await this.db
-      .update(localAgentConnections)
-      .set({ lastConnectedAt: connectedAt })
-      .where(eq(localAgentConnections.id, agent.id));
 
     return {
       id: agent.id,
