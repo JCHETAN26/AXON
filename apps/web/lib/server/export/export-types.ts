@@ -52,6 +52,25 @@ export interface ExportedAccountIdentity {
   readonly accountCreatedAt?: string;
 }
 
+/** A connected repository in an account export — safe metadata only. */
+export interface ExportedConnectedRepository {
+  readonly fullName: string;
+  readonly defaultBranch: string;
+  readonly visibility: string;
+  readonly archived: boolean;
+  readonly lastAnalyzedSha?: string;
+  readonly analysisRunCount: number;
+  readonly proposalCount: number;
+}
+
+/** A connected GitHub App installation in an account export. No tokens/keys. */
+export interface ExportedGithubConnection {
+  readonly accountLogin: string;
+  readonly accountType: string;
+  readonly connectedAt: string;
+  readonly repositories: readonly ExportedConnectedRepository[];
+}
+
 export interface AxonAccountExport {
   readonly exportSchemaVersion: typeof EXPORT_SCHEMA_VERSION;
   readonly kind: "axon-account-export";
@@ -60,6 +79,8 @@ export interface AxonAccountExport {
   readonly disclaimer: string;
   readonly account: ExportedAccountIdentity;
   readonly projects: readonly AxonProjectExport[];
+  /** Connected GitHub installations + repositories (metadata; never tokens). */
+  readonly githubConnections: readonly ExportedGithubConnection[];
   readonly generationUsage: readonly { day: string; count: number }[];
   readonly feedback: readonly { category: string; createdAt: string }[];
   readonly operationalNote: string;

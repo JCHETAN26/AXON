@@ -2,12 +2,16 @@ import { and, eq } from "drizzle-orm";
 
 import { type Database } from "../db/client";
 import {
+  architectureProposals,
   artifacts,
   betaAccess,
+  connectedRepositories,
   documents,
   feedback,
   generationUsage,
+  githubInstallations,
   projects,
+  repositoryAnalysisRuns,
   users,
 } from "../db/schema";
 import { assembleProjectExport, type ProjectExportInput } from "./build-project-export";
@@ -16,6 +20,7 @@ import {
   EXPORT_SCHEMA_VERSION,
   type AxonAccountExport,
   type AxonProjectExport,
+  type ExportedGithubConnection,
 } from "./export-types";
 
 /** Maximum projects exportable synchronously; larger accounts are told the limit. */
@@ -146,6 +151,48 @@ export async function collectAccountExport(
     .from(feedback)
     .where(eq(feedback.userId, ownerId));
 
+  // GitHub connections: safe metadata only. No installation tokens (never
+  // stored), and no evidence excerpts — only per-repo run/proposal counts.
+  const installRows = await db
+    .select()
+    .from(githubInstallations)
+    .where(eq(githubInstallations.ownerId, ownerId));
+  const repoRows = await db
+    .select()
+    .from(connectedRepositories)
+    .where(eq(connectedRepositories.ownerId, ownerId));
+  const runRows = await db
+    .select({ repoId: repositoryAnalysisRuns.repositoryConnectionId })
+    .from(repositoryAnalysisRuns)
+    .where(eq(repositoryAnalysisRuns.ownerId, ownerId));
+  const proposalRows = await db
+    .select({ repoId: architectureProposals.repositoryConnectionId })
+    .from(architectureProposals)
+    .where(eq(architectureProposals.ownerId, ownerId));
+  const countBy = (rows: { repoId: string }[]): Map<string, number> => {
+    const map = new Map<string, number>();
+    for (const row of rows) map.set(row.repoId, (map.get(row.repoId) ?? 0) + 1);
+    return map;
+  };
+  const runCounts = countBy(runRows);
+  const proposalCounts = countBy(proposalRows);
+  const githubConnections: ExportedGithubConnection[] = installRows.map((install) => ({
+    accountLogin: install.accountLogin,
+    accountType: install.accountType,
+    connectedAt: install.connectedAt.toISOString(),
+    repositories: repoRows
+      .filter((r) => r.installationConnectionId === install.id)
+      .map((r) => ({
+        fullName: r.fullName,
+        defaultBranch: r.defaultBranch,
+        visibility: r.visibility,
+        archived: r.archived,
+        ...(r.lastAnalyzedSha != null && { lastAnalyzedSha: r.lastAnalyzedSha }),
+        analysisRunCount: runCounts.get(r.id) ?? 0,
+        proposalCount: proposalCounts.get(r.id) ?? 0,
+      })),
+  }));
+
   const bundle: AxonAccountExport = {
     exportSchemaVersion: EXPORT_SCHEMA_VERSION,
     kind: "axon-account-export",
@@ -159,6 +206,7 @@ export async function collectAccountExport(
       ...(user?.createdAt != null && { accountCreatedAt: user.createdAt.toISOString() }),
     },
     projects: projectExports,
+    githubConnections,
     generationUsage: usageRows.map((row) => ({ day: row.day, count: row.count })),
     // Feedback metadata only — message bodies are never included in exports.
     feedback: feedbackRows.map((row) => ({

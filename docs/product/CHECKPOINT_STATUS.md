@@ -50,7 +50,7 @@
 | 2 | AUTOMATED_VALIDATION_PASSING | Deterministic audit & finding model |
 | 3 | AUTOMATED_VALIDATION_PASSING | Traffic & failure simulation engine |
 | 4 | AUTOMATED_VALIDATION_PASSING | Proposal review & Current/Proposed/Diff |
-| 5 | IN_PROGRESS | GitHub Repository Intelligence Foundation (Phase A committed; B–D incomplete) |
+| 5 | IN_PROGRESS | GitHub Repository Intelligence — connect→analyze→proposal→apply loop built + real-DB integration-tested (concurrency-safe apply); lifecycle export/deletion/disconnect tested. Remaining: review-UI states + Phase D docs |
 | 6 | AUTOMATED_VALIDATION_PASSING | Terraform & Kubernetes intelligence (deterministic logic; workspace/DB flow not fully verified) |
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
 | 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + job dispatch + gated GitHub output all done; job scheduler + full base/head diff remain |
@@ -106,11 +106,23 @@
 ## Checkpoint 5 — GitHub Repository Intelligence Foundation
 
 - **Status**: `IN_PROGRESS`
-- **Done**: Phase A committed (`d80a9f3`) — GitHub App config, single-use install
-  state, owner-scoped connection repository, install flow, `/settings/connections`.
-- **Not done**: Phase B (repo-intel extractors + safe inventory pipeline is
-  partially present but not wired end-to-end), Phase C (proposal review UI +
-  apply), Phase D (lifecycle/export/deletion/docs/full gate).
+- **Done + verified**:
+  - Phase A — GitHub App config, single-use install state, owner-scoped
+    connection repository, install flow, `/settings/connections`.
+  - Phase B — `RepositoryInventoryService.runAnalysis` (tree → classify → bounded
+    file fetch → extractors → evidence → draft proposal), now **real-DB
+    integration-tested** (evidence + proposal produced, owner isolation).
+  - Phase C — `ProposalService.applyProposal` merges accepted components +
+    relationships into a **new document revision under optimistic concurrency**
+    (fixed a silent-no-op concurrency bug; validates the result). Integration-
+    tested (accepted-only merge, already-applied guard, sequential guarded
+    applies, owner isolation).
+  - Phase D lifecycle — account export now includes safe GitHub-connection
+    metadata (no tokens/keys); account deletion **cascades** all repo data;
+    disconnecting a repo removes its analysis lineage but **preserves applied
+    documents**. All three integration-tested.
+- **Remaining**: repository review-UI states (loading/empty/error, a11y, 390px)
+  and Phase D documentation; manual fixture-repo validation (§6.12).
 
 ## Checkpoint 6 — Terraform and Kubernetes Intelligence
 
