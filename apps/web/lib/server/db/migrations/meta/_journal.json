@@ -29,6 +29,13 @@
       "when": 1784784021674,
       "tag": "0003_checkpoints_6_to_12",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784786524824,
+      "tag": "0004_webhook_jobs_local_agents",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,7 @@ export type RouteClass =
   | "beta-page" // authenticated + beta-gated product page
   | "owner-api" // authenticated + beta + owner-scoped
   | "github-callback" // authenticated + beta; validates signed single-use state
+  | "github-webhook" // public endpoint; authenticated by HMAC signature only
   | "internal-api" // dev/test only, fail-closed in production
   | "health" // public liveness/readiness
   | "static";
@@ -103,6 +104,14 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
   { pattern: "/api/health", class: "health", proxyProtected: false, apiEnforced: false },
   { pattern: "/api/ready", class: "health", proxyProtected: false, apiEnforced: false },
 
+  // Public endpoint, but authenticated by GitHub's HMAC signature (not a session).
+  {
+    pattern: "/api/github/webhook",
+    class: "github-webhook",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+
   {
     pattern: "/api/dev/seed-invite",
     class: "internal-api",
@@ -118,6 +127,7 @@ export const PROXY_PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/health",
   "/api/ready",
+  "/api/github/webhook",
 ];
 
 /** Prefixes the edge proxy protects (requires a session) in cloud mode. */

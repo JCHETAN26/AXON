@@ -66,3 +66,13 @@ export function isGithubAppConfigured(env: NodeJS.ProcessEnv = process.env): boo
 export function githubInstallUrl(config: GithubAppConfig): string {
   return `https://github.com/apps/${encodeURIComponent(config.slug)}/installations/new`;
 }
+
+/**
+ * The GitHub App webhook secret, used only to verify inbound delivery
+ * signatures. Server-only; returns null when unset (webhook processing is then
+ * disabled and unsigned deliveries are rejected).
+ */
+export function getGithubWebhookSecret(env: NodeJS.ProcessEnv = process.env): string | null {
+  const secret = env.GITHUB_APP_WEBHOOK_SECRET?.trim();
+  return present(secret) ? secret : null;
+}

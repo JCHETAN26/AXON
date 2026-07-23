@@ -484,8 +484,81 @@ export const generatedInfrastructurePrs = pgTable("generated_infrastructure_prs"
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// --- GitHub webhook processing (Checkpoint 8) ---
+
+/**
+ * Every accepted GitHub webhook delivery. The GitHub delivery id is unique, so a
+ * replayed or duplicated delivery is idempotently ignored. Only safe metadata is
+ * stored — never the payload, secret, or any source content.
+ */
+export const githubWebhookEvents = pgTable("github_webhook_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  // GitHub's X-GitHub-Delivery — the dedup / replay-protection key.
+  deliveryId: text("delivery_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  installationId: bigint("installation_id", { mode: "number" }),
+  repositoryGithubId: bigint("repository_github_id", { mode: "number" }),
+  prNumber: integer("pr_number"),
+  beforeSha: text("before_sha"),
+  afterSha: text("after_sha"),
+  // Resolved from the installation → connected repo; null when unowned/ignored.
+  ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("received"), // received|queued|processed|ignored|failed
+  failureCode: text("failure_code"),
+  receivedAt: timestamp("received_at", { mode: "date" }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { mode: "date" }),
+});
+
+/**
+ * PostgreSQL-backed background jobs. A job is claimed with a lease, retried up to
+ * a bound, and moved to a dead-letter state on exhaustion. `idempotencyKey` (e.g.
+ * the webhook delivery id) prevents duplicate work from duplicate deliveries.
+ */
+export const backgroundJobs = pgTable("background_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id").references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("pending"), // pending|leased|succeeded|failed|dead
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  leaseExpiresAt: timestamp("lease_expires_at", { mode: "date" }),
+  lastError: text("last_error"),
+  progress: integer("progress").notNull().default(0),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 export const ARTIFACT_KINDS = ["audit", "recommendation", "simulation", "import"] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+
+// --- Local Agent Connections (Checkpoint 13) ---
+
+export const localAgentConnections = pgTable("local_agent_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentName: text("agent_name").notNull(),
+  machineLabel: text("machine_label").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  workspaceScope: text("workspace_scope").notNull(),
+  allowedCapabilities: jsonb("allowed_capabilities").notNull().default(sql`'[]'::jsonb`),
+  lastConnectedAt: timestamp("last_connected_at", { mode: "date" }),
+  revokedAt: timestamp("revoked_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const localEvidenceSyncRuns = pgTable("local_evidence_sync_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentConnectionId: uuid("agent_connection_id").notNull().references(() => localAgentConnections.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id"),
+  evidenceCount: integer("evidence_count").notNull().default(0),
+  componentCount: integer("component_count").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending|reviewing|synced|rejected
+  syncedAt: timestamp("synced_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 /** Marker used by the migration runner to confirm the schema is present. */
 export const SCHEMA_READY = sql`select 1`;

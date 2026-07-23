@@ -43,7 +43,7 @@
 | 5 | IN_PROGRESS | GitHub Repository Intelligence Foundation (Phase A committed; B–D incomplete) |
 | 6 | AUTOMATED_VALIDATION_PASSING | Terraform & Kubernetes intelligence (deterministic logic; workspace/DB flow not fully verified) |
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
-| 8 | BLOCKED | GitHub pull-request architecture reviews (webhook/security core absent; analysis shallow) |
+| 8 | IN_PROGRESS | GitHub PR reviews — webhook/security core now built + tested; evidence-based analysis + Check Run gating still shallow |
 | 9 | AUTOMATED_VALIDATION_PASSING | AWS-to-GCP migration workspace (deterministic catalog/engine) |
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
 | 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (persistence verified; calibration ignores ingested metrics) |
@@ -87,19 +87,32 @@
 
 ## Checkpoint 8 — GitHub Pull-Request Architecture Reviews
 
-- **Status**: `BLOCKED`
-- **Present**: `PullRequestService` (poll-based), `githubPrAnalysisRuns` table
-  (+ migration), a markdown review generator, and a PR review UI. Now real-DB
-  integration-tested with owner-isolation.
-- **Blocking gaps vs the contract (§8.2–8.5)**:
-  - **No webhook endpoint**, no signature verification, no delivery-ID
-    deduplication, no replay protection.
-  - **No background-job system** (§8.3 requires PG-backed jobs).
-  - Analysis is **shallow**: the proposal is always empty and "architecture
-    risk" is guessed from file extensions, not a real semantic diff over changed
-    evidence. No claim references changed evidence (§8.5).
-  - `postPrReviewComment` posts to GitHub **without** the required disabled
+- **Status**: `IN_PROGRESS`
+- **Security core now built + tested (§8.2/§8.3)**:
+  - **Webhook endpoint** `POST /api/github/webhook` with **HMAC-SHA256 signature
+    verification** (timing-safe; sha1 rejected; no-secret ⇒ 503), content-type
+    and body-size limits, an event allowlist, and sanitized logging that never
+    records the payload/secret/content.
+  - **Delivery-ID deduplication / replay protection** via a unique
+    `github_webhook_events.delivery_id`; a replayed delivery is an idempotent
+    no-op.
+  - **PostgreSQL-backed job system** (`background_jobs`) with idempotent enqueue
+    (keyed on delivery id), atomic lease/claim (`FOR UPDATE SKIP LOCKED`), retry
+    with a bound, and a dead-letter state. Duplicate deliveries never create a
+    second job.
+  - **Server-side ownership resolution** — the owner is derived from the
+    installation → connected repository, never trusted from the payload's names;
+    unowned or unconnected events are ignored.
+  - Migration `0004_webhook_and_jobs`. Tests: signature (valid/invalid/missing/
+    tampered/sha1/no-secret), route gates, dedup/ownership/enqueue, job
+    lifecycle — all real-DB where applicable.
+- **Remaining gaps**:
+  - Analysis is still **shallow**: the proposal is empty and risk is guessed
+    from file extensions, not a real semantic diff over changed evidence (§8.5).
+    The job **processor/dispatch** to the analysis services is not yet wired.
+  - `postPrReviewComment` still posts to GitHub without the required disabled
     feature-flag + permission-upgrade gate (§8.1/§8.7).
+  - A live GitHub App webhook configuration remains a manual validation gate.
 
 ## Checkpoint 9 — AWS-to-GCP Migration Workspace
 
