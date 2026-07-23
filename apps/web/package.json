@@ -28,6 +28,7 @@
     "@axon/architecture-simulation": "workspace:*",
     "@axon/diagram-schema": "workspace:*",
     "@axon/ui": "workspace:*",
+    "@octokit/app": "^16.1.2",
     "@xyflow/react": "^12.11.2",
     "drizzle-orm": "^0.45.2",
     "next": "^16.2.10",

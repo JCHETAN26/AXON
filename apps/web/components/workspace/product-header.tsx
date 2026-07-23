@@ -24,6 +24,9 @@ export function ProductHeader({ account }: { account?: ReactNode }) {
             <Link href="/projects" className={LINK_CLASSES}>
               Projects
             </Link>
+            <Link href="/settings/connections" className={LINK_CLASSES}>
+              Connections
+            </Link>
             <Link href="/account" className={LINK_CLASSES}>
               Account
             </Link>

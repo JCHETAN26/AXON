@@ -14,7 +14,7 @@ import { isSafeRedirect } from "@/lib/server/auth-helpers";
  */
 const CLOUD = process.env.AXON_PERSISTENCE_MODE === "cloud";
 
-const PROTECTED_PREFIXES = ["/projects"];
+const PROTECTED_PREFIXES = ["/projects", "/settings"];
 const PUBLIC_PREFIXES = ["/sign-in", "/invite", "/api/auth", "/api/health", "/api/ready"];
 
 const cloudProxy = edgeAuth((request) => {

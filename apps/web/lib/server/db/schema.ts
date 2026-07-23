@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   integer,
   jsonb,
   pgTable,
@@ -173,6 +175,154 @@ export const feedback = pgTable("feedback", {
   category: text("category").notNull(),
   message: text("message").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- GitHub repository intelligence (Checkpoint 5) ---
+//
+// A separate GitHub App (not the identity OAuth App) grants read-only access to
+// repositories the user explicitly selects. These tables store only safe
+// references and metadata: installation access tokens are minted server-side
+// per request and never persisted, and the App private key is never stored here.
+
+/**
+ * Short-lived, single-use state for the GitHub App installation redirect. The
+ * signed state token carries this row's id; redemption at the callback claims
+ * the row atomically (consumed_at) so a replayed callback fails safely.
+ */
+export const githubInstallStates = pgTable("github_install_states", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+  consumedAt: timestamp("consumed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** A GitHub App installation the user has connected and bound to their account. */
+export const githubInstallations = pgTable(
+  "github_installations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // GitHub's numeric installation id — an identifier, never a token.
+    installationId: bigint("installation_id", { mode: "number" }).notNull(),
+    accountId: bigint("account_id", { mode: "number" }).notNull(),
+    accountLogin: text("account_login").notNull(),
+    accountType: text("account_type").notNull(), // "User" | "Organization"
+    status: text("status").notNull().default("connected"),
+    permissionsSnapshot: jsonb("permissions_snapshot"),
+    connectedAt: timestamp("connected_at", { mode: "date" }).notNull().defaultNow(),
+    lastVerifiedAt: timestamp("last_verified_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  // Globally unique: an installation binds to exactly one account, so a second
+  // user can never claim one already linked elsewhere.
+  (t) => [uniqueIndex("github_installations_installation_idx").on(t.installationId)],
+);
+
+/** A repository granted to an installation and connected for analysis. */
+export const connectedRepositories = pgTable(
+  "connected_repositories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    installationConnectionId: uuid("installation_connection_id")
+      .notNull()
+      .references(() => githubInstallations.id, { onDelete: "cascade" }),
+    // Stable GitHub numeric repository id — the remote identity, never a name.
+    repoGithubId: bigint("repo_github_id", { mode: "number" }).notNull(),
+    ownerLogin: text("owner_login").notNull(),
+    name: text("name").notNull(),
+    fullName: text("full_name").notNull(),
+    defaultBranch: text("default_branch").notNull(),
+    visibility: text("visibility").notNull(), // "public" | "private"
+    archived: boolean("archived").notNull().default(false),
+    url: text("url").notNull(),
+    lastAnalyzedSha: text("last_analyzed_sha"),
+    lastSyncStatus: text("last_sync_status"),
+    lastSyncAt: timestamp("last_sync_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("connected_repositories_owner_repo_idx").on(t.ownerId, t.repoGithubId)],
+);
+
+/** One manual static-analysis run against a repository at a specific commit. */
+export const repositoryAnalysisRuns = pgTable("repository_analysis_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  repositoryConnectionId: uuid("repository_connection_id")
+    .notNull()
+    .references(() => connectedRepositories.id, { onDelete: "cascade" }),
+  requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  commitSha: text("commit_sha").notNull(),
+  status: text("status").notNull().default("pending"), // pending|running|succeeded|failed
+  startedAt: timestamp("started_at", { mode: "date" }),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  supportedFileCount: integer("supported_file_count").notNull().default(0),
+  skippedFileCount: integer("skipped_file_count").notNull().default(0),
+  evidenceCount: integer("evidence_count").notNull().default(0),
+  proposalId: uuid("proposal_id"),
+  failureCode: text("failure_code"),
+  failureSummary: text("failure_summary"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** Structured, deterministic evidence extracted from a repository file. */
+export const repositoryEvidence = pgTable("repository_evidence", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  analysisRunId: uuid("analysis_run_id")
+    .notNull()
+    .references(() => repositoryAnalysisRuns.id, { onDelete: "cascade" }),
+  repositoryConnectionId: uuid("repository_connection_id")
+    .notNull()
+    .references(() => connectedRepositories.id, { onDelete: "cascade" }),
+  commitSha: text("commit_sha").notNull(),
+  filePath: text("file_path").notNull(),
+  startLine: integer("start_line"),
+  endLine: integer("end_line"),
+  evidenceType: text("evidence_type").notNull(),
+  extractor: text("extractor").notNull(),
+  // A safe, redacted excerpt — never a secret value or full file.
+  excerpt: text("excerpt"),
+  fact: jsonb("fact").notNull(),
+  confidence: text("confidence").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** A reviewable architecture proposal derived from repository evidence. */
+export const architectureProposals = pgTable("architecture_proposals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Nullable until the user applies the proposal to a specific project.
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  repositoryConnectionId: uuid("repository_connection_id")
+    .notNull()
+    .references(() => connectedRepositories.id, { onDelete: "cascade" }),
+  analysisRunId: uuid("analysis_run_id").references(() => repositoryAnalysisRuns.id, {
+    onDelete: "set null",
+  }),
+  sourceCommitSha: text("source_commit_sha").notNull(),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("draft"),
+  proposal: jsonb("proposal").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
 export const ARTIFACT_KINDS = ["audit", "recommendation", "simulation", "import"] as const;

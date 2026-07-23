@@ -11,6 +11,7 @@ export type RouteClass =
   | "invite" // authenticated, not beta-gated
   | "beta-page" // authenticated + beta-gated product page
   | "owner-api" // authenticated + beta + owner-scoped
+  | "github-callback" // authenticated + beta; validates signed single-use state
   | "internal-api" // dev/test only, fail-closed in production
   | "health" // public liveness/readiness
   | "static";
@@ -52,6 +53,7 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
     apiEnforced: false,
   },
   { pattern: "/account", class: "beta-page", proxyProtected: true, apiEnforced: false },
+  { pattern: "/settings/connections", class: "beta-page", proxyProtected: true, apiEnforced: false },
 
   { pattern: "/api/projects", class: "owner-api", proxyProtected: false, apiEnforced: true },
   {
@@ -78,6 +80,26 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
   { pattern: "/api/account/export", class: "owner-api", proxyProtected: false, apiEnforced: true },
   { pattern: "/api/account", class: "owner-api", proxyProtected: false, apiEnforced: true },
 
+  { pattern: "/api/connections", class: "owner-api", proxyProtected: false, apiEnforced: true },
+  {
+    pattern: "/api/connections/github/start",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/connections/github/callback",
+    class: "github-callback",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/connections/[connectionId]/repositories",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+
   { pattern: "/api/health", class: "health", proxyProtected: false, apiEnforced: false },
   { pattern: "/api/ready", class: "health", proxyProtected: false, apiEnforced: false },
 
@@ -99,7 +121,7 @@ export const PROXY_PUBLIC_PREFIXES = [
 ];
 
 /** Prefixes the edge proxy protects (requires a session) in cloud mode. */
-export const PROXY_PROTECTED_PREFIXES = ["/projects", "/account"];
+export const PROXY_PROTECTED_PREFIXES = ["/projects", "/account", "/settings"];
 
 /**
  * Validates that a redirect target is a safe same-origin relative path.

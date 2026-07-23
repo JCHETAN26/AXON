@@ -56,6 +56,16 @@ describe("route-protection matrix", () => {
     expect(dev?.class).toBe("internal-api");
     expect(dev?.apiEnforced).toBe(true);
   });
+
+  it("enforces authorization on every connection API and the install callback", () => {
+    for (const entry of ROUTE_MATRIX.filter((route) => route.pattern.startsWith("/api/connections"))) {
+      expect(entry.apiEnforced).toBe(true);
+    }
+    const callback = ROUTE_MATRIX.find(
+      (route) => route.pattern === "/api/connections/github/callback",
+    );
+    expect(callback?.class).toBe("github-callback");
+  });
 });
 
 describe("isSafeReturnPath", () => {
