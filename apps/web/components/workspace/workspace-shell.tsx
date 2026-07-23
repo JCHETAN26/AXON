@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApprovalsWorkspace } from "./approvals-workspace";
 import { AuditWorkspace } from "./audit-workspace";
 import { CommentsWorkspace } from "./comments-workspace";
+import { CopilotWorkspace } from "./copilot-workspace";
 import { CostWorkspace } from "./cost-workspace";
 import { DocumentSummary } from "./document-summary";
 import { GenerationPanel } from "./generation-panel";
@@ -57,6 +58,7 @@ type WorkspaceTool =
   | "present"
   | "share"
   | "comments"
+  | "copilot"
   | "approvals"
   | "recommend"
   | "import"
@@ -73,6 +75,7 @@ const TOOL_LABEL: Record<WorkspaceTool, string> = {
   present: "Present",
   share: "Share",
   comments: "Comments",
+  copilot: "Copilot",
   approvals: "Approvals",
   recommend: "Recommend",
   import: "Import",
@@ -89,6 +92,7 @@ const TOOLS: readonly WorkspaceTool[] = [
   "present",
   "share",
   "comments",
+  "copilot",
   "approvals",
   "recommend",
   "import",
@@ -540,6 +544,15 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
         hidden={activeTool !== "comments"}
       >
         <CommentsWorkspace document={document} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-copilot"
+        aria-labelledby="workspace-tab-copilot"
+        hidden={activeTool !== "copilot"}
+      >
+        <CopilotWorkspace document={document} auditState={auditState} />
       </div>
 
       <div

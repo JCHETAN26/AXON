@@ -19,6 +19,7 @@ function toKind(raw: string): ArtifactKind | null {
 // Per-kind byte caps for persisted artifact payloads.
 const ARTIFACT_LIMIT: Record<ArtifactKind, number> = {
   audit: PAYLOAD_LIMITS.auditBytes,
+  copilot: PAYLOAD_LIMITS.copilotBytes,
   recommendation: PAYLOAD_LIMITS.recommendationBytes,
   simulation: PAYLOAD_LIMITS.simulationBytes,
   import: PAYLOAD_LIMITS.importDraftBytes,

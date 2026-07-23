@@ -626,7 +626,7 @@ export const backgroundJobs = pgTable("background_jobs", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
 
-export const ARTIFACT_KINDS = ["audit", "recommendation", "simulation", "import"] as const;
+export const ARTIFACT_KINDS = ["audit", "recommendation", "simulation", "import", "copilot"] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 // --- Local Agent Connections (Checkpoint 13) ---

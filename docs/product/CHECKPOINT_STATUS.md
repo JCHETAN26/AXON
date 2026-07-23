@@ -592,13 +592,18 @@
   - Added an adversarial untrusted-evidence fixture that attempts prompt
     injection; the grounding module ignores the snippet as instructions and
     does not echo it into the direct answer.
+  - Added a first Architecture Copilot workspace tab backed by the deterministic
+    grounding module. It answers only from the current architecture document and
+    current audit findings, shows confidence/citations/missing information, and
+    persists a bounded transcript through the existing owner-scoped artifact
+    store (`copilot` kind) for local and cloud modes.
   - Targeted automated gates pass:
-    `pnpm --filter @axon/web test -- grounding`,
+    `pnpm --filter @axon/web test -- grounding copilot-workspace workspace-shell artifacts route-matrix`,
     `pnpm --filter @axon/web typecheck`, and
     `pnpm --filter @axon/web lint`.
 - **Known gaps**:
-  - No model-provider integration, typed tool runner, conversation persistence,
-    UI chat surface, rate limits, provider controls, or full copilot evaluation
+  - No model-provider integration, typed tool runner, server-side conversation
+    table, rate limits, provider controls, streaming, or full copilot evaluation
     suite exists yet.
 
 ## Checkpoint 19 — Benchmarks, Security, and Scale

@@ -53,6 +53,7 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("tab", { name: "Present" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Share" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Copilot" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Approvals" })).toHaveAttribute(
       "aria-selected",
       "false",
@@ -144,6 +145,25 @@ describe("WorkspaceShell", () => {
     await user.click(await screen.findByRole("tab", { name: "Comments" }));
     expect(screen.getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Comments" })).toBeVisible();
+  });
+
+  it("switches to the copilot workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Queryable",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Copilot" }));
+    expect(screen.getByRole("tab", { name: "Copilot" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Architecture Copilot" })).toBeVisible();
+    expect(screen.getByLabelText("Ask a grounded question")).toBeVisible();
   });
 
   it("switches to the approvals workspace tab", async () => {
