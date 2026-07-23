@@ -27,14 +27,18 @@
 >   blueprint, principles, domain model, roadmap, trust/provenance, integration
 >   security, known limitations, manual validation, competitor parity, and this
 >   checkpoint ledger.
-> - Migrations `0000`–`0004` are **applied to live Supabase** (via the pooler;
->   `db:migrate` now uses `scripts/migrate.ts` — see `docs/ops/migrations.md`).
->   Live schema matches the code (29 public tables).
-> - **Checkpoint 8** security core (webhook + HMAC signature + delivery dedup +
->   PG-backed jobs) is now built and tested, but analysis is still shallow (empty
->   proposal, extension-based risk) and the job dispatch is not wired → **IN_PROGRESS**.
-> - **Checkpoints 10 and 11** persist correctly but use **hardcoded mock data**
->   for the actual cloud discovery / telemetry calibration → **IN_PROGRESS**.
+> - Migrations `0000`–`0010` are **applied to live Supabase** (via the pooler;
+>   `db:migrate` uses `scripts/migrate.ts` — see `docs/ops/migrations.md`).
+>   Live schema matches the code (35 public tables).
+> - **Checkpoint 8**: webhook + HMAC signature + delivery dedup + PG-backed jobs,
+>   **plus** evidence-based PR analysis (extractors run on changed files → real
+>   proposal), a job dispatcher (`webhook-processor`), and disabled-by-default
+>   GitHub write-back are all built and tested. Remaining: a job **scheduler**
+>   invokes `drainWebhookJobs`, and a full base↔head semantic diff → **IN_PROGRESS**.
+> - **Checkpoint 11**: calibration now reads the **ingested** telemetry metrics
+>   (no more mock samples). Remaining: telemetry UI + live-source manual gate.
+> - **Checkpoint 10** still uses **hardcoded mock cloud assets** (no real cloud
+>   reads) → **IN_PROGRESS**.
 > - **Checkpoint 5** is only partially built (Phase A committed; B–D
 >   incomplete) → **IN_PROGRESS**. It is the real dependency for CP6–12.
 > - No checkpoint has completed its **manual validation gate** (live GitHub
@@ -49,10 +53,10 @@
 | 5 | IN_PROGRESS | GitHub Repository Intelligence Foundation (Phase A committed; B–D incomplete) |
 | 6 | AUTOMATED_VALIDATION_PASSING | Terraform & Kubernetes intelligence (deterministic logic; workspace/DB flow not fully verified) |
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
-| 8 | IN_PROGRESS | GitHub PR reviews — webhook/security core now built + tested; evidence-based analysis + Check Run gating still shallow |
+| 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + job dispatch + gated GitHub output all done; job scheduler + full base/head diff remain |
 | 9 | AUTOMATED_VALIDATION_PASSING | AWS-to-GCP migration workspace (deterministic catalog/engine) |
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
-| 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (persistence verified; calibration ignores ingested metrics) |
+| 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (calibration now uses ingested metrics; UI + live-source manual gate remain) |
 | 12 | AUTOMATED_VALIDATION_PASSING | Controlled infrastructure PRs (codegen + DB verified; live PR creation is a manual gate) |
 | 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, and MCP tool subset exist; core scope remains partial) |
 | 14 | IN_PROGRESS | Cloud cost intelligence (deterministic cost model + MCP estimate tool; UI/persistence/manual gates incomplete) |
@@ -148,13 +152,22 @@
   - Migration `0004_webhook_and_jobs`. Tests: signature (valid/invalid/missing/
     tampered/sha1/no-secret), route gates, dedup/ownership/enqueue, job
     lifecycle — all real-DB where applicable.
+- **Evidence-based analysis now built + tested (§8.5)**:
+  - `analyzePullRequest` fetches each supported changed file at the head commit,
+    runs the deterministic extractors, and builds a **real evidence-backed
+    proposal** (every component cites file+fact evidence). Risk derives from the
+    evidence (infrastructure/components), not file extensions.
+  - A job dispatcher (`jobs/webhook-processor.ts`, `processWebhookJob` /
+    `drainWebhookJobs`) runs queued PR jobs into real analysis runs — tested with
+    the real DB, including owner isolation.
+  - GitHub write-back (`postPrReviewComment`) is **disabled by default**
+    (`isGithubPrOutputEnabled`) and throws `PrOutputDisabledError` unless
+    explicitly enabled — the required feature-flag + permission gate (§8.1/§8.7).
 - **Remaining gaps**:
-  - Analysis is still **shallow**: the proposal is empty and risk is guessed
-    from file extensions, not a real semantic diff over changed evidence (§8.5).
-    The job **processor/dispatch** to the analysis services is not yet wired.
-  - `postPrReviewComment` still posts to GitHub without the required disabled
-    feature-flag + permission-upgrade gate (§8.1/§8.7).
-  - A live GitHub App webhook configuration remains a manual validation gate.
+  - No **scheduler/worker** yet invokes `drainWebhookJobs`, so queued jobs are
+    not drained in production without one (the function is tested).
+  - PR analysis uses head-commit evidence, not yet a full **base↔head** semantic
+    diff. A live GitHub App webhook configuration remains a manual validation gate.
 
 ## Checkpoint 9 — AWS-to-GCP Migration Workspace
 
@@ -180,9 +193,12 @@
 - **Verified**: `telemetrySources` / `telemetryMetrics` tables (+ migration),
   owner-scoped `TelemetryService` with real-DB integration tests (register,
   ingest), and a pure telemetry calibrator in `@axon/architecture-simulation`.
-- **Gap**: `getCalibratedCapacityProfile` **ignores ingested metrics** and
-  calibrates from hardcoded mock samples — calibration is not yet driven by real
-  telemetry.
+  `getCalibratedCapacityProfile` now **reads the ingested `telemetry_metrics`
+  rows** for the project's sources and calibrates from them (unknown metric names
+  are ignored, never guessed); with no usable samples it returns an empty
+  calibration rather than fabricating one. Tested against the real DB.
+- **Remaining**: telemetry UI, and a live telemetry source (Prometheus/OTel)
+  ingestion path — a manual validation gate.
 
 ## Checkpoint 12 — Controlled Infrastructure Pull Requests
 
