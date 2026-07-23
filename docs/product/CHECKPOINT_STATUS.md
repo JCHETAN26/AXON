@@ -39,8 +39,12 @@
 >   (no more mock samples). Remaining: telemetry UI + live-source manual gate.
 > - **Checkpoint 10** still uses **hardcoded mock cloud assets** (no real cloud
 >   reads) → **IN_PROGRESS**.
-> - **Checkpoint 5** is only partially built (Phase A committed; B–D
->   incomplete) → **IN_PROGRESS**. It is the real dependency for CP6–12.
+> - **Checkpoint 5** is complete through automated validation: the full
+>   connect→analyze→proposal→review→apply loop plus data lifecycle
+>   (export/deletion/disconnect) is built, real-DB integration-tested,
+>   concurrency-safe, and documented. Only the live GitHub-App fixture-repo run
+>   + visual review remain → **MANUAL_VALIDATION_REQUIRED**. It is the real
+>   dependency for CP6–12.
 > - No checkpoint has completed its **manual validation gate** (live GitHub
 >   App, live cloud, live telemetry), so none is fully `PASSING`.
 
