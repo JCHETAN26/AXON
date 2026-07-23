@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { computeArchitectureAwareLayout } from "./adapters";
 import {
   benchmarkArchitectureLayout,
+  buildLayoutBenchmarkReport,
   buildSyntheticArchitectureDocument,
   evaluateArchitectureLayout,
 } from "./layout-benchmark";
@@ -53,5 +54,21 @@ describe("benchmarkArchitectureLayout", () => {
     expect(benchmark.millisecondsPerRun).toBeGreaterThanOrEqual(0);
     expect(benchmark.quality.nodeCount).toBe(100);
     expect(benchmark.quality.overlappingPairs).toEqual([]);
+  });
+});
+
+describe("buildLayoutBenchmarkReport", () => {
+  it("builds aggregate pass/fail evidence for release validation", () => {
+    const report = buildLayoutBenchmarkReport({
+      nodeCounts: [10, 50],
+      iterations: 1,
+      generatedAt: "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(report.reportVersion).toBe("axon.layout-benchmark-report.v1");
+    expect(report.generatedAt).toBe("2026-07-23T00:00:00.000Z");
+    expect(report.status).toBe("passing");
+    expect(report.gates).toHaveLength(2);
+    expect(report.gates.every((gate) => gate.reasons.length === 0)).toBe(true);
   });
 });

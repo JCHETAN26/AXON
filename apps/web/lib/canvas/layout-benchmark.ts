@@ -45,6 +45,21 @@ export interface ArchitectureLayoutBenchmark {
   readonly quality: LayoutQualityReport;
 }
 
+export interface LayoutBenchmarkGate {
+  readonly nodeCount: number;
+  readonly status: "passing" | "failing";
+  readonly reasons: readonly string[];
+  readonly benchmark: ArchitectureLayoutBenchmark;
+}
+
+export interface LayoutBenchmarkReport {
+  readonly reportVersion: string;
+  readonly generatedAt: string;
+  readonly fixtureNodeCounts: readonly number[];
+  readonly status: "passing" | "failing";
+  readonly gates: readonly LayoutBenchmarkGate[];
+}
+
 const DEFAULT_NODE_WIDTH = 220;
 const DEFAULT_NODE_HEIGHT = 96;
 const DEFAULT_MIN_GAP = 24;
@@ -221,5 +236,50 @@ export function benchmarkArchitectureLayout(
     totalMilliseconds,
     millisecondsPerRun: totalMilliseconds / boundedIterations,
     quality: evaluateArchitectureLayout(document, layout),
+  };
+}
+
+export function buildLayoutBenchmarkReport(input: {
+  readonly nodeCounts?: readonly number[];
+  readonly iterations?: number;
+  readonly generatedAt?: string;
+} = {}): LayoutBenchmarkReport {
+  const fixtureNodeCounts = input.nodeCounts ?? [10, 50, 100, 500];
+  const gates = fixtureNodeCounts.map((nodeCount): LayoutBenchmarkGate => {
+    const document = buildSyntheticArchitectureDocument({ nodeCount });
+    const benchmark = benchmarkArchitectureLayout(document, input.iterations ?? 3);
+    const reasons: string[] = [];
+    if (benchmark.quality.positionedNodeCount !== nodeCount) {
+      reasons.push(
+        `Expected ${String(nodeCount)} positioned nodes; got ${String(benchmark.quality.positionedNodeCount)}.`,
+      );
+    }
+    if (benchmark.quality.missingNodeIds.length > 0) {
+      reasons.push(`Missing nodes: ${benchmark.quality.missingNodeIds.join(", ")}.`);
+    }
+    if (benchmark.quality.overlappingPairs.length > 0) {
+      reasons.push(
+        `Overlapping node pairs: ${String(benchmark.quality.overlappingPairs.length)}.`,
+      );
+    }
+    if (benchmark.quality.backwardEdgeCount > 0) {
+      reasons.push(`Backward edges: ${String(benchmark.quality.backwardEdgeCount)}.`);
+    }
+    if (benchmark.quality.boundingBox.width <= 0 || benchmark.quality.boundingBox.height <= 0) {
+      reasons.push("Layout bounding box is empty.");
+    }
+    return {
+      nodeCount,
+      status: reasons.length === 0 ? "passing" : "failing",
+      reasons,
+      benchmark,
+    };
+  });
+  return {
+    reportVersion: "axon.layout-benchmark-report.v1",
+    generatedAt: input.generatedAt ?? new Date().toISOString(),
+    fixtureNodeCounts,
+    status: gates.every((gate) => gate.status === "passing") ? "passing" : "failing",
+    gates,
   };
 }

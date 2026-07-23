@@ -633,6 +633,10 @@
   - Added visual layout benchmark helpers in the web package with deterministic
     10/50/100/500-node synthetic diagrams and quality scoring for coverage,
     overlaps, edge direction, and bounding boxes.
+  - Added an aggregate layout benchmark report with explicit `passing` /
+    `failing` gates for synthetic fixture sizes. The report records per-size
+    quality evidence and concrete failure reasons for missing nodes, overlaps,
+    backward edges, or empty bounding boxes.
   - Targeted automated gates pass:
     `pnpm --filter @axon/repo-intel test -- benchmark-corpus`,
     `pnpm --filter @axon/web test -- layout-benchmark`,
@@ -641,7 +645,7 @@
 - **Known gaps**:
   - The corpus is still tiny and fixture-grade; large repos, held-out sets,
     browser-rendered visual traces, cost/simulation/copilot benchmark runners,
-    security review automation, and measured performance reports are not
+    security review automation, and runtime performance dashboards are not
     complete.
 
 ## Checkpoint 20 — Production Release and Launch
