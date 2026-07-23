@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  doublePrecision,
   integer,
   jsonb,
   pgTable,
@@ -323,6 +324,164 @@ export const architectureProposals = pgTable("architecture_proposals", {
   proposal: jsonb("proposal").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Architecture Snapshots and Drift (Checkpoint 7) ---
+
+/** Immutable architecture snapshot recording exact document payload, version, hash, and reason. */
+export const architectureSnapshots = pgTable("architecture_snapshots", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  documentVersion: integer("document_version").notNull(),
+  payload: jsonb("payload").notNull(),
+  creationReason: text("creation_reason").notNull(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  previousSnapshotId: uuid("previous_snapshot_id"),
+  semanticHash: text("semantic_hash").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** Detected architectural drift between intended, repository, IaC, and proposal states. */
+export const architectureDrifts = pgTable("architecture_drifts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  baseSnapshotId: uuid("base_snapshot_id")
+    .notNull()
+    .references(() => architectureSnapshots.id, { onDelete: "cascade" }),
+  comparedSnapshotId: uuid("compared_snapshot_id").references(() => architectureSnapshots.id, { onDelete: "cascade" }),
+  driftCategory: text("drift_category").notNull(),
+  status: text("status").notNull().default("detected"),
+  semanticChanges: jsonb("semantic_changes").notNull(),
+  severity: text("severity").notNull(),
+  confidence: text("confidence").notNull(),
+  userDecision: text("user_decision"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at", { mode: "date" }),
+});
+
+// --- GitHub Pull Request Architecture Reviews (Checkpoint 8) ---
+
+/** Pull-request static architecture analysis run for a connected repository. */
+export const githubPrAnalysisRuns = pgTable("github_pr_analysis_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  repositoryConnectionId: uuid("repository_connection_id")
+    .notNull()
+    .references(() => connectedRepositories.id, { onDelete: "cascade" }),
+  prNumber: integer("pr_number").notNull(),
+  prTitle: text("pr_title").notNull(),
+  prAuthor: text("pr_author").notNull(),
+  headSha: text("head_sha").notNull(),
+  baseSha: text("base_sha").notNull(),
+  status: text("status").notNull().default("pending"),
+  architectureRisk: text("architecture_risk").notNull().default("none"),
+  proposalId: uuid("proposal_id").references(() => architectureProposals.id, { onDelete: "set null" }),
+  impactSummary: jsonb("impact_summary").notNull(),
+  commentPostedAt: timestamp("comment_posted_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Read-only Cloud Discovery (Checkpoint 10) ---
+
+/** A read-only AWS or GCP connection (IAM role ARN or Service Account). */
+export const cloudConnections = pgTable("cloud_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(), // "aws" | "gcp"
+  accountOrProjectId: text("account_or_project_id").notNull(),
+  roleArnOrServiceAccount: text("role_arn_or_service_account").notNull(),
+  status: text("status").notNull().default("connected"),
+  lastDiscoveredAt: timestamp("last_discovered_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** A read-only cloud discovery execution run. */
+export const cloudDiscoveryRuns = pgTable("cloud_discovery_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  connectionId: uuid("connection_id")
+    .notNull()
+    .references(() => cloudConnections.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  discoveredAssetCount: integer("discovered_asset_count").notNull().default(0),
+  matchedAssetCount: integer("matched_asset_count").notNull().default(0),
+  unmanagedAssetCount: integer("unmanaged_asset_count").notNull().default(0),
+  proposalId: uuid("proposal_id").references(() => architectureProposals.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Runtime Telemetry & Calibrated Simulation (Checkpoint 11) ---
+
+/** A runtime telemetry metrics source (Prometheus, CloudWatch, Datadog, OTLP). */
+export const telemetrySources = pgTable("telemetry_sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(), // "prometheus" | "cloudwatch" | "datadog" | "opentelemetry"
+  name: text("name").notNull(),
+  endpointUrl: text("endpoint_url").notNull(),
+  status: text("status").notNull().default("connected"),
+  lastSampledAt: timestamp("last_sampled_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/** Ingested telemetry metric samples. */
+export const telemetryMetrics = pgTable("telemetry_metrics", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  telemetrySourceId: uuid("telemetry_source_id")
+    .notNull()
+    .references(() => telemetrySources.id, { onDelete: "cascade" }),
+  componentId: text("component_id").notNull(),
+  metricName: text("metric_name").notNull(),
+  value: doublePrecision("value").notNull(),
+  unit: text("unit").notNull(),
+  sampledAt: timestamp("sampled_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Controlled Infrastructure Pull Requests (Checkpoint 12) ---
+
+/** Record of generated Terraform/Kubernetes PRs submitted to GitHub. */
+export const generatedInfrastructurePrs = pgTable("generated_infrastructure_prs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  repositoryConnectionId: uuid("repository_connection_id")
+    .notNull()
+    .references(() => connectedRepositories.id, { onDelete: "cascade" }),
+  proposalId: uuid("proposal_id")
+    .notNull()
+    .references(() => architectureProposals.id, { onDelete: "cascade" }),
+  prNumber: integer("pr_number").notNull(),
+  prUrl: text("pr_url").notNull(),
+  branchName: text("branch_name").notNull(),
+  targetBranch: text("target_branch").notNull().default("main"),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
 export const ARTIFACT_KINDS = ["audit", "recommendation", "simulation", "import"] as const;

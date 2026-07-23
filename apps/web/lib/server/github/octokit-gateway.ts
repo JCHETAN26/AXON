@@ -5,6 +5,8 @@ import {
   GithubError,
   type GithubGateway,
   type InstallationInfo,
+  type PullRequestFile,
+  type PullRequestInfo,
   type RemoteRepository,
   type RemoteTree,
   type RemoteTreeEntry,
@@ -190,6 +192,149 @@ export class OctokitGithubGateway implements GithubGateway {
       return buf.toString("utf8");
     } catch (error) {
       if (error instanceof GithubError) throw error;
+      mapError(error);
+    } finally {
+      done();
+    }
+  }
+
+  async listPullRequests(
+    installationId: number,
+    owner: string,
+    repo: string,
+    state: "open" | "closed" | "all" = "open",
+  ): Promise<PullRequestInfo[]> {
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    const { signal, done } = withTimeout();
+    try {
+      const res = await octokit.request("GET /repos/{owner}/{repo}/pulls", {
+        owner,
+        repo,
+        state,
+        per_page: 50,
+        request: { signal },
+      });
+      return (res.data as any[]).map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user?.login ?? "unknown",
+        state: pr.state === "open" ? "open" : "closed",
+        headSha: pr.head?.sha ?? "",
+        baseSha: pr.base?.sha ?? "",
+        createdAt: pr.created_at,
+      }));
+    } catch (error) {
+      mapError(error);
+    } finally {
+      done();
+    }
+  }
+
+  async getPullRequestFiles(
+    installationId: number,
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<PullRequestFile[]> {
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    const { signal, done } = withTimeout();
+    try {
+      const res = await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+        request: { signal },
+      });
+      return (res.data as any[]).map((f) => ({
+        filename: f.filename,
+        status: f.status as PullRequestFile["status"],
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+      }));
+    } catch (error) {
+      mapError(error);
+    } finally {
+      done();
+    }
+  }
+
+  async postPullRequestComment(
+    installationId: number,
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: string,
+  ): Promise<void> {
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    const { signal, done } = withTimeout();
+    try {
+      await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+        owner,
+        repo,
+        issue_number: prNumber,
+        body,
+        request: { signal },
+      });
+    } catch (error) {
+      mapError(error);
+    } finally {
+      done();
+    }
+  }
+
+  async createBranchAndPullRequest(
+    installationId: number,
+    owner: string,
+    repo: string,
+    params: {
+      branchName: string;
+      baseBranch: string;
+      title: string;
+      body: string;
+      files: { path: string; content: string }[];
+    }
+  ): Promise<{ prNumber: number; prUrl: string }> {
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    const { signal, done } = withTimeout();
+    try {
+      const baseSha = await this.getBranchHeadSha(installationId, owner, repo, params.baseBranch);
+
+      await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
+        owner,
+        repo,
+        ref: `refs/heads/${params.branchName}`,
+        sha: baseSha,
+        request: { signal },
+      });
+
+      for (const f of params.files) {
+        await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", {
+          owner,
+          repo,
+          path: f.path,
+          message: `Add generated ${f.path} via AXON`,
+          content: Buffer.from(f.content).toString("base64"),
+          branch: params.branchName,
+          request: { signal },
+        });
+      }
+
+      const res = await octokit.request("POST /repos/{owner}/{repo}/pulls", {
+        owner,
+        repo,
+        title: params.title,
+        body: params.body,
+        head: params.branchName,
+        base: params.baseBranch,
+        request: { signal },
+      });
+
+      return {
+        prNumber: res.data.number,
+        prUrl: res.data.html_url,
+      };
+    } catch (error) {
       mapError(error);
     } finally {
       done();

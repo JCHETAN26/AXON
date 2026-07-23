@@ -143,6 +143,7 @@ export function resolveCapacity(
   kind: ComponentKind,
   override: ComponentCapacityOverride | undefined,
   architectureInput: ComponentCapacityOverride = {},
+  telemetryInput: ComponentCapacityOverride = {},
 ): ResolvedCapacity {
   const defaults = KIND_DEFAULTS[kind];
   const values = {} as Record<CapacityField, number>;
@@ -150,10 +151,14 @@ export function resolveCapacity(
 
   for (const field of CAPACITY_FIELDS) {
     const fromUser = override?.[field];
+    const fromTelemetry = telemetryInput[field];
     const fromArchitecture = architectureInput[field];
     if (fromUser !== undefined) {
       values[field] = fromUser;
       fieldBasis[field] = "user-input";
+    } else if (fromTelemetry !== undefined) {
+      values[field] = fromTelemetry;
+      fieldBasis[field] = "telemetry-measured";
     } else if (fromArchitecture !== undefined) {
       values[field] = fromArchitecture;
       fieldBasis[field] = "architecture-input";

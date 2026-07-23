@@ -29,3 +29,6 @@ export {
   safeParseProject,
   type Project,
 } from "./project";
+export * from "./snapshots";
+export * from "./semantic-hash";
+export * from "./semantic-diff";

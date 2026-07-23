@@ -27,6 +27,7 @@
     "@axon/architecture-recommendations": "workspace:*",
     "@axon/architecture-simulation": "workspace:*",
     "@axon/diagram-schema": "workspace:*",
+    "@axon/repo-intel": "workspace:*",
     "@axon/ui": "workspace:*",
     "@octokit/app": "^16.1.2",
     "@xyflow/react": "^12.11.2",

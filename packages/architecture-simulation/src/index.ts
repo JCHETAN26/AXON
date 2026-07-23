@@ -68,3 +68,11 @@ export {
   type SimulationResult,
   type ValueBasis,
 } from "./types";
+export {
+  calibrateCapacityFromTelemetry,
+  TELEMETRY_PROVIDERS,
+  TelemetryProviderSchema,
+  type CalibrationResult,
+  type TelemetryMetricSample,
+  type TelemetryProvider,
+} from "./telemetry-calibrator";

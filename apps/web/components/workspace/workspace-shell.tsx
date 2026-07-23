@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AuditWorkspace } from "./audit-workspace";
 import { DocumentSummary } from "./document-summary";
 import { GenerationPanel } from "./generation-panel";
+import { HistoryWorkspace } from "./history-workspace";
 import { ImportWorkspace } from "./import-workspace";
 import { RecommendationWorkspace } from "./recommendation-workspace";
 import { SimulationWorkspace } from "./simulation-workspace";
@@ -30,7 +31,7 @@ import { getSimulationRepository } from "@/lib/simulation/get-simulation-reposit
 
 const PLANNED_TOOLS = ["Monitor"] as const;
 
-type WorkspaceTool = "canvas" | "audit" | "simulate" | "recommend" | "import";
+type WorkspaceTool = "canvas" | "audit" | "simulate" | "recommend" | "import" | "history";
 
 const TOOL_LABEL: Record<WorkspaceTool, string> = {
   canvas: "Canvas",
@@ -38,8 +39,9 @@ const TOOL_LABEL: Record<WorkspaceTool, string> = {
   simulate: "Simulate",
   recommend: "Recommend",
   import: "Import",
+  history: "History & Drift",
 };
-const TOOLS: readonly WorkspaceTool[] = ["canvas", "audit", "simulate", "recommend", "import"];
+const TOOLS: readonly WorkspaceTool[] = ["canvas", "audit", "simulate", "recommend", "import", "history"];
 
 type ShellState =
   { status: "loading" } | { status: "not-found" } | { status: "ready"; data: ProjectWithDocument };
@@ -313,6 +315,27 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
             setState({ status: "ready", data: saved });
             setImportDraft(null);
             setExternalRevision((revision) => revision + 1);
+          }}
+        />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-history"
+        aria-labelledby="workspace-tab-history"
+        hidden={activeTool !== "history"}
+      >
+        <HistoryWorkspace
+          projectId={project.id}
+          document={document}
+          snapshots={[]}
+          driftItems={[]}
+          onRestoreSnapshot={(_snapshotId) => {
+            void _snapshotId;
+          }}
+          onResolveDrift={(_driftId, _decision) => {
+            void _driftId;
+            void _decision;
           }}
         />
       </div>

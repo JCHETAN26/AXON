@@ -7,10 +7,17 @@ import { type ConfidenceLevel } from "./confidence";
  * mistaken for an observation.
  */
 export type ValueBasis =
-  "user-input" | "architecture-input" | "axon-default" | "derived" | "projected" | "unmodeled";
+  | "user-input"
+  | "telemetry-measured"
+  | "architecture-input"
+  | "axon-default"
+  | "derived"
+  | "projected"
+  | "unmodeled";
 
 export const VALUE_BASIS_LABEL: Record<ValueBasis, string> = {
   "user-input": "User-provided input",
+  "telemetry-measured": "Measured runtime telemetry",
   "architecture-input": "Architecture-provided assumption",
   "axon-default": "AXON default assumption",
   derived: "Derived value",

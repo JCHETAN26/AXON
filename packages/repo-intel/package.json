@@ -1,0 +1,28 @@
+{
+  "name": "@axon/repo-intel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@axon/architecture-compose-import": "workspace:*",
+    "@axon/diagram-schema": "workspace:*",
+    "smol-toml": "^1.1.3",
+    "yaml": "^2.6.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@axon/config": "workspace:*",
+    "eslint": "^9.39.5",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

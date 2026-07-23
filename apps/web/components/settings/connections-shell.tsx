@@ -206,9 +206,21 @@ function InstallationCard({
           {repositories.map((repo) => (
             <li key={repo.id} className="type-mono-data flex items-center justify-between gap-2">
               <span>{repo.fullName}</span>
-              <span className="text-foreground-muted">
-                {repo.lastAnalyzedSha === null ? "not analyzed" : `@ ${repo.lastAnalyzedSha.slice(0, 7)}`}
-              </span>
+              <div className="flex items-center gap-4">
+                <span className="text-foreground-muted">
+                  {repo.lastAnalyzedSha === null ? "not analyzed" : `@ ${repo.lastAnalyzedSha.slice(0, 7)}`}
+                </span>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={async () => {
+                    await fetch(`/api/repositories/${repo.id}/analyze`, { method: "POST" });
+                    onChanged();
+                  }}
+                >
+                  Analyze
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

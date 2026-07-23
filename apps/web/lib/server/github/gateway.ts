@@ -55,6 +55,23 @@ export class GithubError extends Error {
   }
 }
 
+export interface PullRequestInfo {
+  readonly number: number;
+  readonly title: string;
+  readonly author: string;
+  readonly state: "open" | "closed";
+  readonly headSha: string;
+  readonly baseSha: string;
+  readonly createdAt: string;
+}
+
+export interface PullRequestFile {
+  readonly filename: string;
+  readonly status: "added" | "modified" | "removed" | "renamed";
+  readonly additions: number;
+  readonly deletions: number;
+}
+
 export interface GithubGateway {
   /** Confirms the App can access the installation and returns safe metadata. */
   verifyInstallation(installationId: number): Promise<InstallationInfo | null>;
@@ -73,4 +90,23 @@ export interface GithubGateway {
     ref: string,
     maxBytes: number,
   ): Promise<string>;
+  /** List pull requests for a repository. */
+  listPullRequests(installationId: number, owner: string, repo: string, state?: "open" | "closed" | "all"): Promise<PullRequestInfo[]>;
+  /** List changed files in a pull request. */
+  getPullRequestFiles(installationId: number, owner: string, repo: string, prNumber: number): Promise<PullRequestFile[]>;
+  /** Post a markdown comment to a pull request. */
+  postPullRequestComment(installationId: number, owner: string, repo: string, prNumber: number, body: string): Promise<void>;
+  /** Create a feature branch, commit files, and open a pull request. */
+  createBranchAndPullRequest(
+    installationId: number,
+    owner: string,
+    repo: string,
+    params: {
+      branchName: string;
+      baseBranch: string;
+      title: string;
+      body: string;
+      files: { path: string; content: string }[];
+    }
+  ): Promise<{ prNumber: number; prUrl: string }>;
 }
