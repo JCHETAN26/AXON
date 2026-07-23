@@ -160,9 +160,10 @@ async function main(): Promise<void> {
         .catch(() => undefined);
       // Remove the verification invite if it survived (redemption nulls the user).
       const { betaInvites } = await import("../lib/server/db/schema");
+      const { hashInviteToken } = await import("../lib/server/beta");
       await db
         .delete(betaInvites)
-        .where(and(eq(betaInvites.code, `${prefix}-INV`)))
+        .where(and(eq(betaInvites.tokenHash, hashInviteToken(`${prefix}-INV`))))
         .catch(() => undefined);
     } catch {
       console.error("Cleanup encountered an issue; inspect records with prefix:", prefix);

@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
+    "beta:invite": "tsx scripts/beta-invite.ts",
     "verify:postgres": "tsx scripts/verify-postgres.ts",
     "verify:client-bundle": "tsx scripts/verify-client-bundle.ts",
     "db:generate": "drizzle-kit generate",

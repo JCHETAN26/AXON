@@ -27,7 +27,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const db = await getDatabaseAsync();
-  const result = await redeemInvite(db, user.id, parsed.data.code);
+  const result = await redeemInvite(db, user.id, parsed.data.code, {
+    ...(user.email !== undefined && { userEmail: user.email }),
+  });
   if (result.ok || (await hasBetaAccess(db, user.id))) {
     return privateJson({ ok: true });
   }
@@ -37,6 +39,10 @@ export async function POST(request: Request): Promise<Response> {
       ? "That invitation code is not valid."
       : result.reason === "already-redeemed"
         ? "That invitation has already been used."
-        : "Invitation could not be redeemed.";
+        : result.reason === "expired"
+          ? "That invitation has expired."
+          : result.reason === "email-mismatch"
+            ? "That invitation was issued for a different account."
+            : "Invitation could not be redeemed.";
   return privateJson({ error: message }, { status: 400 });
 }

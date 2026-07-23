@@ -7,6 +7,8 @@ planned for the beta.
 | --- | --- |
 | Apply migrations | `pnpm --filter @axon/web db:migrate` |
 | Inspect migration status | `pnpm --filter @axon/web db:status` |
+| Create an invitation | `pnpm --filter @axon/web beta:invite --email <address> --expires-in 7d` |
+| Revoke an unredeemed invitation | `pnpm --filter @axon/web beta:invite --revoke <RAW-TOKEN>` |
 | Verify PostgreSQL (staging) | `AXON_VERIFICATION_MODE=staging DATABASE_URL=… pnpm --filter @axon/web verify:postgres` |
 | Verify client bundle | `pnpm --filter @axon/web build && pnpm --filter @axon/web verify:client-bundle` |
 | Check readiness | `curl -s https://<host>/api/ready` |
@@ -14,20 +16,27 @@ planned for the beta.
 
 ## Invitations
 
-Invitations are managed directly against the database with the existing helpers
-(no public endpoint):
+Invitations use the `beta:invite` operator command (there is no public
+endpoint). The command connects through `DATABASE_URL`, so load the environment
+first (`set -a; source apps/web/.env.local; set +a`).
 
-- **Create**: call `createInvite(db, code, note?)` (`lib/server/beta.ts`) via a
-  one-off script or a psql insert into `beta_invites (code)`. Share the raw code
-  through a secure channel; store only the code, never a hash the user needs.
-- **Revoke (unredeemed)**: delete the `beta_invites` row for the code, or set
-  its `redeemed_by_user_id` to a sentinel so it can no longer be redeemed.
+- **Create**: `pnpm --filter @axon/web beta:invite --email <address> [--expires-in 7d] [--note "..."]`.
+  A high-entropy token is generated and **only its SHA-256 hash is stored** — the
+  raw token is printed once and cannot be recovered. The invitation is
+  single-use, restricted to that email, and expires (default 7 days). Share the
+  token through a secure channel.
+- **Revoke (unredeemed)**: `pnpm --filter @axon/web beta:invite --revoke <RAW-TOKEN>`.
+  Deletes the matching unredeemed invitation; already-redeemed invitations are
+  left intact (their access lives in `beta_access`).
+
+Redemption enforces, in order: token validity, expiry, email match, and single
+use. Signing in never grants access on its own — only redemption does.
+
+To revoke an already-granted user's access, remove their `beta_access` row:
 
 ```sql
--- create
-insert into beta_invites (code, note) values ('BETA-XXXX', 'design partner');
--- revoke an unredeemed invite
-delete from beta_invites where code = 'BETA-XXXX' and redeemed_by_user_id is null;
+-- revoke beta access for a specific user (by email)
+delete from beta_access where user_id = (select id from users where email = 'person@example.com');
 ```
 
 ## Export a user's data

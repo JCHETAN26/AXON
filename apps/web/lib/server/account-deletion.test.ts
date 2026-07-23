@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createInvite, hasBetaAccess, redeemInvite } from "./beta";
+import { createInvite, hasBetaAccess, hashInviteToken, redeemInvite } from "./beta";
 import { accountExists, deleteAccount } from "./account-deletion";
 import { type Database } from "./db/client";
 import { artifacts, betaInvites, feedback, projects } from "./db/schema";
@@ -54,7 +54,10 @@ describe("deleteAccount", () => {
     const alice = await betaUser("alice@example.com", "INV-A");
     await deleteAccount(db, alice);
 
-    const invites = await db.select().from(betaInvites).where(eq(betaInvites.code, "INV-A"));
+    const invites = await db
+      .select()
+      .from(betaInvites)
+      .where(eq(betaInvites.tokenHash, hashInviteToken("INV-A")));
     expect(invites).toHaveLength(1);
     expect(invites[0]?.redeemedByUserId).toBeNull();
   });

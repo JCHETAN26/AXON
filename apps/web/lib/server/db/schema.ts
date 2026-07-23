@@ -74,8 +74,14 @@ export const verificationTokens = pgTable(
  */
 export const betaInvites = pgTable("beta_invites", {
   id: uuid("id").defaultRandom().primaryKey(),
-  // The redemption code the user enters. Unique and case-normalised by callers.
-  code: text("code").notNull().unique(),
+  // Only the SHA-256 hash of the redemption token is stored — never the raw
+  // token. The raw token is shown once at creation and cannot be recovered.
+  tokenHash: text("token_hash").notNull().unique(),
+  // Optional email the invite is restricted to (lower-cased). When set, only a
+  // session whose email matches may redeem it.
+  email: text("email"),
+  // Optional expiry. When set, redemption after this instant fails safely.
+  expiresAt: timestamp("expires_at", { mode: "date" }),
   note: text("note"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   redeemedByUserId: uuid("redeemed_by_user_id").references(() => users.id, {
