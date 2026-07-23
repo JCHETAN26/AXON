@@ -127,10 +127,11 @@ export function LocalIntelligenceWorkspace({
               <div className="border-2 border-border bg-surface-muted p-3">
                 <pre className="type-mono-data text-xs text-foreground font-mono whitespace-pre">
                   {`# Install and start the MCP server
-npx @axon/mcp-server --workspace ./your-repo
+npx @axon/mcp-server --stdio
 
-# Or use stdio transport for MCP clients
-npx @axon/mcp-server --transport stdio --workspace ./your-repo`}
+# Optional CLI state file for durable normalized local state
+axon-mcp analyze --root ./repo --state-file .axon/mcp-state.json
+axon-mcp export --root ./repo --state-file .axon/mcp-state.json --json`}
                 </pre>
               </div>
 
@@ -143,7 +144,7 @@ npx @axon/mcp-server --transport stdio --workspace ./your-repo`}
   "mcpServers": {
     "axon": {
       "command": "npx",
-      "args": ["@axon/mcp-server", "--workspace", "./your-repo"],
+      "args": ["@axon/mcp-server", "--stdio"],
       "transport": "stdio"
     }
   }
@@ -152,9 +153,8 @@ npx @axon/mcp-server --transport stdio --workspace ./your-repo`}
               </div>
 
               <p className="type-body-md text-xs text-foreground-muted">
-                🔒 The MCP server binds to <code className="text-accent">127.0.0.1</code> (loopback)
-                by default. No source code is transmitted to external services unless you explicitly
-                synchronize evidence.
+                The MCP server uses stdio and does not open a network listener. No source code is
+                transmitted to external services unless you explicitly synchronize evidence.
               </p>
             </div>
           </section>

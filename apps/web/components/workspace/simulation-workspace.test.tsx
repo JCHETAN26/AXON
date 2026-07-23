@@ -81,6 +81,8 @@ describe("SimulationWorkspace", () => {
       />,
     );
     expect(screen.getByText("First projected constraint")).toBeVisible();
+    expect(screen.getByText("Scenario Cost Impact")).toBeVisible();
+    expect(screen.getByText(/scenario-derived usage for non-fixed drivers/i)).toBeVisible();
     expect(screen.getByText(/Projected to reach its modeled limit at approximately/)).toBeVisible();
     expect(screen.getByText("Components (12)")).toBeVisible();
     expect(screen.getByRole("status", { name: "Simulation status" })).toHaveTextContent(

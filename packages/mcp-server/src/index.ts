@@ -9,6 +9,20 @@ export {
   ListEvidenceInput,
   ExplainEvidenceInput,
   AuditArchitectureInput,
+  CreateScenarioInput,
+  SimulateScenarioInput,
+  UpdateArchitectureProposalInput,
+  CompareSnapshotsInput,
+  CompareCloudsInput,
+  PlanMigrationInput,
+  SynchronizeEvidenceInput,
+  EstimateCostInput,
   ExportArchitectureInput,
   type McpTools,
 } from "./tools/index";
+export {
+  getMcpToolDefinitions,
+  handleMcpJsonRpcRequest,
+  runCli,
+  runMcpStdioServer,
+} from "./transport";

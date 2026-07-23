@@ -118,6 +118,96 @@ export const projects = pgTable(
   (project) => [uniqueIndex("projects_owner_idx").on(project.ownerId, project.id)],
 );
 
+export const projectShareLinks = pgTable(
+  "project_share_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    role: text("role").notNull(),
+    label: text("label"),
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (shareLink) => [
+    uniqueIndex("project_share_links_owner_project_idx").on(
+      shareLink.ownerId,
+      shareLink.projectId,
+      shareLink.id,
+    ),
+  ],
+);
+
+export const projectComments = pgTable(
+  "project_comments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    anchorKind: text("anchor_kind"),
+    anchorId: text("anchor_id"),
+    resolvedAt: timestamp("resolved_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (comment) => [
+    uniqueIndex("project_comments_owner_project_idx").on(
+      comment.ownerId,
+      comment.projectId,
+      comment.id,
+    ),
+  ],
+);
+
+export const projectApprovals = pgTable(
+  "project_approvals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    requesterId: uuid("requester_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    subjectKind: text("subject_kind").notNull(),
+    subjectId: text("subject_id").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("pending"),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (approval) => [
+    uniqueIndex("project_approvals_owner_project_idx").on(
+      approval.ownerId,
+      approval.projectId,
+      approval.id,
+    ),
+  ],
+);
+
 /**
  * The architecture document for a project. `version` backs optimistic
  * concurrency (Checkpoint 2): a write must present the version it read.
@@ -359,7 +449,9 @@ export const architectureDrifts = pgTable("architecture_drifts", {
   baseSnapshotId: uuid("base_snapshot_id")
     .notNull()
     .references(() => architectureSnapshots.id, { onDelete: "cascade" }),
-  comparedSnapshotId: uuid("compared_snapshot_id").references(() => architectureSnapshots.id, { onDelete: "cascade" }),
+  comparedSnapshotId: uuid("compared_snapshot_id").references(() => architectureSnapshots.id, {
+    onDelete: "cascade",
+  }),
   driftCategory: text("drift_category").notNull(),
   status: text("status").notNull().default("detected"),
   semanticChanges: jsonb("semantic_changes").notNull(),
@@ -388,7 +480,9 @@ export const githubPrAnalysisRuns = pgTable("github_pr_analysis_runs", {
   baseSha: text("base_sha").notNull(),
   status: text("status").notNull().default("pending"),
   architectureRisk: text("architecture_risk").notNull().default("none"),
-  proposalId: uuid("proposal_id").references(() => architectureProposals.id, { onDelete: "set null" }),
+  proposalId: uuid("proposal_id").references(() => architectureProposals.id, {
+    onDelete: "set null",
+  }),
   impactSummary: jsonb("impact_summary").notNull(),
   commentPostedAt: timestamp("comment_posted_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
@@ -423,7 +517,9 @@ export const cloudDiscoveryRuns = pgTable("cloud_discovery_runs", {
   discoveredAssetCount: integer("discovered_asset_count").notNull().default(0),
   matchedAssetCount: integer("matched_asset_count").notNull().default(0),
   unmanagedAssetCount: integer("unmanaged_asset_count").notNull().default(0),
-  proposalId: uuid("proposal_id").references(() => architectureProposals.id, { onDelete: "set null" }),
+  proposalId: uuid("proposal_id").references(() => architectureProposals.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -537,12 +633,18 @@ export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 export const localAgentConnections = pgTable("local_agent_connections", {
   id: uuid("id").defaultRandom().primaryKey(),
-  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   agentName: text("agent_name").notNull(),
   machineLabel: text("machine_label").notNull(),
   tokenHash: text("token_hash").notNull(),
+  credentialHash: text("credential_hash"),
+  credentialIssuedAt: timestamp("credential_issued_at", { mode: "date" }),
   workspaceScope: text("workspace_scope").notNull(),
-  allowedCapabilities: jsonb("allowed_capabilities").notNull().default(sql`'[]'::jsonb`),
+  allowedCapabilities: jsonb("allowed_capabilities")
+    .notNull()
+    .default(sql`'[]'::jsonb`),
   lastConnectedAt: timestamp("last_connected_at", { mode: "date" }),
   revokedAt: timestamp("revoked_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
@@ -550,13 +652,104 @@ export const localAgentConnections = pgTable("local_agent_connections", {
 
 export const localEvidenceSyncRuns = pgTable("local_evidence_sync_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
-  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  agentConnectionId: uuid("agent_connection_id").notNull().references(() => localAgentConnections.id, { onDelete: "cascade" }),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  agentConnectionId: uuid("agent_connection_id")
+    .notNull()
+    .references(() => localAgentConnections.id, { onDelete: "cascade" }),
   projectId: uuid("project_id"),
   evidenceCount: integer("evidence_count").notNull().default(0),
   componentCount: integer("component_count").notNull().default(0),
   status: text("status").notNull().default("pending"), // pending|reviewing|synced|rejected
   syncedAt: timestamp("synced_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const localSynchronizedEvidence = pgTable("local_synchronized_evidence", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  syncRunId: uuid("sync_run_id")
+    .notNull()
+    .references(() => localEvidenceSyncRuns.id, { onDelete: "cascade" }),
+  agentConnectionId: uuid("agent_connection_id")
+    .notNull()
+    .references(() => localAgentConnections.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id"),
+  localEvidenceId: text("local_evidence_id").notNull(),
+  filePath: text("file_path").notNull(),
+  startLine: integer("start_line"),
+  endLine: integer("end_line"),
+  evidenceType: text("evidence_type").notNull(),
+  extractor: text("extractor").notNull(),
+  excerpt: text("excerpt"),
+  fact: jsonb("fact").notNull(),
+  confidence: text("confidence").notNull(),
+  provenance: text("provenance").notNull().default("locally-observed"),
+  redactionStatus: text("redaction_status").notNull(),
+  localAnalysisVersion: text("local_analysis_version").notNull(),
+  localWorkspaceSnapshotId: text("local_workspace_snapshot_id").notNull(),
+  rawSourceRetained: boolean("raw_source_retained").notNull().default(false),
+  syncedAt: timestamp("synced_at", { mode: "date" }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// --- Cloud Cost Intelligence (Checkpoint 14) ---
+
+export const costUsageAssumptions = pgTable(
+  "cost_usage_assumptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    componentId: text("component_id").notNull(),
+    unit: text("unit").notNull(),
+    value: doublePrecision("value").notNull(),
+    source: text("source").notNull(),
+    timeWindow: text("time_window").notNull(),
+    confidence: text("confidence").notNull(),
+    derivation: text("derivation").notNull(),
+    userOverride: boolean("user_override").notNull().default(false),
+    observedAt: timestamp("observed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (assumption) => [
+    uniqueIndex("cost_usage_assumptions_owner_project_component_unit_idx").on(
+      assumption.ownerId,
+      assumption.projectId,
+      assumption.componentId,
+      assumption.unit,
+    ),
+  ],
+);
+
+export const costEstimateRuns = pgTable("cost_estimate_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  region: text("region").notNull(),
+  modelVersion: text("model_version").notNull(),
+  pricingCatalogVersion: text("pricing_catalog_version").notNull(),
+  pricingEffectiveDate: text("pricing_effective_date").notNull(),
+  usageProfile: jsonb("usage_profile").notNull(),
+  baselineEstimate: jsonb("baseline_estimate").notNull(),
+  scaleProjections: jsonb("scale_projections"),
+  lowMonthly: doublePrecision("low_monthly").notNull(),
+  expectedMonthly: doublePrecision("expected_monthly").notNull(),
+  highMonthly: doublePrecision("high_monthly").notNull(),
+  confidence: text("confidence").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 

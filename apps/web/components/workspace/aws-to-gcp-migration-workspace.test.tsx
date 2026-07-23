@@ -18,7 +18,9 @@ DOCUMENT.nodes = [
   { id: "n2", name: "RDS Postgres", category: "database", meta: "aws_db_instance" },
 ];
 
-function renderWorkspace(overrides: Partial<Parameters<typeof AwsToGcpMigrationWorkspace>[0]> = {}) {
+function renderWorkspace(
+  overrides: Partial<Parameters<typeof AwsToGcpMigrationWorkspace>[0]> = {},
+) {
   const props = {
     projectId: "project-1",
     document: DOCUMENT,
@@ -28,7 +30,7 @@ function renderWorkspace(overrides: Partial<Parameters<typeof AwsToGcpMigrationW
   render(
     <ThemeProvider>
       <AwsToGcpMigrationWorkspace {...props} />
-    </ThemeProvider>
+    </ThemeProvider>,
   );
   return props;
 }
@@ -38,6 +40,8 @@ describe("AwsToGcpMigrationWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByText("AWS to GCP Infrastructure Migration Workspace")).toBeVisible();
+    expect(screen.getByText("Migration Cost Comparison")).toBeVisible();
+    expect(screen.getByText(/AWS us-east-1 → GCP us-central1/)).toBeVisible();
     expect(screen.getAllByText(/Google Compute Engine/)[0]).toBeVisible();
     expect(screen.getAllByText(/Google Cloud SQL/)[0]).toBeVisible();
     expect(screen.getByRole("button", { name: /APPLY GCP TARGET ARCHITECTURE/ })).toBeEnabled();

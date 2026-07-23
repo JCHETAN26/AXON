@@ -10,7 +10,13 @@ const NODE: CanvasNode = {
   id: "postgres",
   type: "architecture",
   position: { x: 0, y: 0 },
-  data: { name: "postgresql", category: "Database", groupId: "data", meta: "conn 82/300" },
+  data: {
+    name: "postgresql",
+    category: "Database",
+    groupId: "data",
+    meta: "conn 82/300",
+    iconId: "aws.rds",
+  },
 };
 
 const OTHER: CanvasNode = {
@@ -40,6 +46,7 @@ describe("NodeInspector", () => {
     expect(screen.getByLabelText("Category")).toHaveValue("Database");
     expect(screen.getByLabelText("Group")).toHaveValue("data");
     expect(screen.getByLabelText("Technical note")).toHaveValue("conn 82/300");
+    expect(screen.getByLabelText("Icon")).toHaveValue("aws.rds");
     expect(screen.getByText("id: postgres")).toBeInTheDocument();
   });
 
@@ -56,6 +63,12 @@ describe("NodeInspector", () => {
 
     await user.clear(screen.getByLabelText("Technical note"));
     expect(onChange).toHaveBeenLastCalledWith({ meta: undefined });
+
+    await user.selectOptions(screen.getByLabelText("Icon"), "gcp.cloud-sql");
+    expect(onChange).toHaveBeenLastCalledWith({ iconId: "gcp.cloud-sql" });
+
+    await user.selectOptions(screen.getByLabelText("Icon"), "");
+    expect(onChange).toHaveBeenLastCalledWith({ iconId: undefined });
 
     await user.click(screen.getByLabelText("Planned (not yet running)"));
     expect(onChange).toHaveBeenLastCalledWith({ planned: true });

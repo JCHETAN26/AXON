@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import { eq } from "drizzle-orm";
+
 import { EvidenceSyncService } from "./sync-service";
 import type { Database } from "../db/client";
 import type { RepositoryEvidence, ArchitectureProposal } from "@axon/repo-intel";
+import { createTestDatabase, resetTestDatabase } from "../db/testing";
+import { localAgentConnections, localSynchronizedEvidence, users } from "../db/schema";
 
 const EVIDENCE: RepositoryEvidence[] = [
   {
@@ -43,6 +47,8 @@ const PROPOSAL: ArchitectureProposal = {
   createdAt: "2026-01-01T00:00:00Z",
 };
 
+const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
+
 function mockDb(agentExists = true, agentRevoked = false) {
   return {
     select: vi.fn().mockReturnValue({
@@ -50,8 +56,15 @@ function mockDb(agentExists = true, agentRevoked = false) {
         where: vi.fn().mockReturnValue({
           limit: vi.fn().mockResolvedValue(
             agentExists
-              ? [{ id: "agent-1", ownerId: "user-1", revokedAt: agentRevoked ? new Date() : null }]
-              : []
+              ? [
+                  {
+                    id: "agent-1",
+                    ownerId: "user-1",
+                    workspaceScope: PROJECT_ID,
+                    revokedAt: agentRevoked ? new Date() : null,
+                  },
+                ]
+              : [],
           ),
           orderBy: vi.fn().mockResolvedValue([]),
         }),
@@ -91,12 +104,15 @@ describe("EvidenceSyncService", () => {
     const service = new EvidenceSyncService(db, "user-1");
     const result = await service.submitSync({
       agentConnectionId: "agent-1",
+      projectId: PROJECT_ID,
       evidence: EVIDENCE,
       proposal: PROPOSAL,
       excludedEvidenceIds: ["ev-2"],
     });
 
     expect(result.syncRunId).toBe("sync-1");
+    expect(result.persistedEvidenceCount).toBe(1);
+    expect(db.insert).toHaveBeenCalledTimes(2);
   });
 
   it("rejects sync for revoked agent", async () => {
@@ -106,9 +122,10 @@ describe("EvidenceSyncService", () => {
     await expect(
       service.submitSync({
         agentConnectionId: "agent-1",
+        projectId: PROJECT_ID,
         evidence: EVIDENCE,
         proposal: PROPOSAL,
-      })
+      }),
     ).rejects.toThrow("revoked");
   });
 
@@ -119,9 +136,84 @@ describe("EvidenceSyncService", () => {
     await expect(
       service.submitSync({
         agentConnectionId: "agent-x",
+        projectId: PROJECT_ID,
         evidence: EVIDENCE,
         proposal: PROPOSAL,
-      })
+      }),
     ).rejects.toThrow("not found");
   });
+
+  it("rejects sync outside the agent workspace scope", async () => {
+    const db = mockDb();
+    const service = new EvidenceSyncService(db, "user-1");
+
+    await expect(
+      service.submitSync({
+        agentConnectionId: "agent-1",
+        projectId: "project-2",
+        evidence: EVIDENCE,
+        proposal: PROPOSAL,
+      }),
+    ).rejects.toThrow("not scoped");
+  });
+
+  it("persists approved local evidence with provenance and redaction metadata", async () => {
+    const db = await createTestDatabase();
+    await resetTestDatabase(db);
+    const insertedUsers = await db
+      .insert(users)
+      .values({ email: "local-sync@example.com" })
+      .returning({ id: users.id });
+    const ownerId = insertedUsers[0]?.id;
+    if (!ownerId) throw new Error("failed to insert owner");
+
+    const agents = await db
+      .insert(localAgentConnections)
+      .values({
+        ownerId,
+        agentName: "Dev Laptop",
+        machineLabel: "macbook",
+        tokenHash: "pairing-token-hash",
+        credentialHash: "credential-hash",
+        workspaceScope: PROJECT_ID,
+        allowedCapabilities: ["sync"],
+      })
+      .returning({ id: localAgentConnections.id });
+    const agentConnectionId = agents[0]?.id;
+    if (!agentConnectionId) throw new Error("failed to insert agent");
+
+    const service = new EvidenceSyncService(db, ownerId);
+    const result = await service.submitSync({
+      agentConnectionId,
+      projectId: PROJECT_ID,
+      evidence: EVIDENCE,
+      proposal: PROPOSAL,
+      excludedEvidenceIds: ["ev-2"],
+      localAnalysisVersion: "local-analyzer-test",
+      localWorkspaceSnapshotId: "snapshot-1",
+    });
+
+    expect(result.persistedEvidenceCount).toBe(1);
+
+    const rows = await db
+      .select()
+      .from(localSynchronizedEvidence)
+      .where(eq(localSynchronizedEvidence.syncRunId, result.syncRunId));
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      ownerId,
+      agentConnectionId,
+      localEvidenceId: "ev-1",
+      filePath: "src/server.ts",
+      evidenceType: "dependency",
+      extractor: "package-json",
+      confidence: "high",
+      provenance: "locally-observed",
+      redactionStatus: "no-excerpt",
+      localAnalysisVersion: "local-analyzer-test",
+      localWorkspaceSnapshotId: "snapshot-1",
+      rawSourceRetained: false,
+    });
+  }, 15_000);
 });

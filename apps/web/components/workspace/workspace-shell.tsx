@@ -11,15 +11,23 @@ import { buttonClasses, cx } from "@axon/ui";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ApprovalsWorkspace } from "./approvals-workspace";
 import { AuditWorkspace } from "./audit-workspace";
+import { CommentsWorkspace } from "./comments-workspace";
+import { CostWorkspace } from "./cost-workspace";
 import { DocumentSummary } from "./document-summary";
 import { GenerationPanel } from "./generation-panel";
 import { HistoryWorkspace } from "./history-workspace";
+import { IconRegistryWorkspace } from "./icon-registry-workspace";
 import { ImportWorkspace } from "./import-workspace";
+import { MultiCloudWorkspace } from "./multi-cloud-workspace";
+import { PresentationWorkspace } from "./presentation-workspace";
 import { RecommendationWorkspace } from "./recommendation-workspace";
+import { SharingWorkspace } from "./sharing-workspace";
 import { SimulationWorkspace } from "./simulation-workspace";
 import { ArchitectureCanvasEditor } from "@/components/canvas/architecture-canvas-editor";
 import { AuditOverlayProvider } from "@/components/canvas/audit-overlay-context";
+import { CostOverlayProvider } from "@/components/canvas/cost-overlay-context";
 import { SimulationOverlayProvider } from "@/components/canvas/simulation-overlay-context";
 import { getAuditRepository } from "@/lib/audit/get-audit-repository";
 import { getProjectRepository } from "@/lib/projects/get-repository";
@@ -31,17 +39,51 @@ import { getSimulationRepository } from "@/lib/simulation/get-simulation-reposit
 
 const PLANNED_TOOLS = ["Monitor"] as const;
 
-type WorkspaceTool = "canvas" | "audit" | "simulate" | "recommend" | "import" | "history";
+type WorkspaceTool =
+  | "canvas"
+  | "audit"
+  | "simulate"
+  | "cost"
+  | "multi-cloud"
+  | "icons"
+  | "present"
+  | "share"
+  | "comments"
+  | "approvals"
+  | "recommend"
+  | "import"
+  | "history";
 
 const TOOL_LABEL: Record<WorkspaceTool, string> = {
   canvas: "Canvas",
   audit: "Audit",
   simulate: "Simulate",
+  cost: "Cost",
+  "multi-cloud": "Multi-cloud",
+  icons: "Icons",
+  present: "Present",
+  share: "Share",
+  comments: "Comments",
+  approvals: "Approvals",
   recommend: "Recommend",
   import: "Import",
   history: "History & Drift",
 };
-const TOOLS: readonly WorkspaceTool[] = ["canvas", "audit", "simulate", "recommend", "import", "history"];
+const TOOLS: readonly WorkspaceTool[] = [
+  "canvas",
+  "audit",
+  "simulate",
+  "cost",
+  "multi-cloud",
+  "icons",
+  "present",
+  "share",
+  "comments",
+  "approvals",
+  "recommend",
+  "import",
+  "history",
+];
 
 type ShellState =
   { status: "loading" } | { status: "not-found" } | { status: "ready"; data: ProjectWithDocument };
@@ -229,24 +271,26 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
           />
         ) : (
           <AuditOverlayProvider findings={auditState?.findings ?? []}>
-            <SimulationOverlayProvider result={canvasSimulation}>
-              <div className="hidden md:block">
-                <ArchitectureCanvasEditor
-                  key={externalRevision}
-                  projectId={project.id}
-                  document={document}
-                  onSaved={(saved) => {
-                    setState({ status: "ready", data: saved });
-                  }}
-                />
-              </div>
-              <div className="flex flex-col gap-3 md:hidden">
-                <p className="type-mono-data text-foreground-muted">
-                  READ_ONLY · open on a larger screen to edit the canvas
-                </p>
-                <DocumentSummary document={document} />
-              </div>
-            </SimulationOverlayProvider>
+            <CostOverlayProvider document={document}>
+              <SimulationOverlayProvider result={canvasSimulation}>
+                <div className="hidden md:block">
+                  <ArchitectureCanvasEditor
+                    key={externalRevision}
+                    projectId={project.id}
+                    document={document}
+                    onSaved={(saved) => {
+                      setState({ status: "ready", data: saved });
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-3 md:hidden">
+                  <p className="type-mono-data text-foreground-muted">
+                    READ_ONLY · open on a larger screen to edit the canvas
+                  </p>
+                  <DocumentSummary document={document} />
+                </div>
+              </SimulationOverlayProvider>
+            </CostOverlayProvider>
           </AuditOverlayProvider>
         )}
       </div>
@@ -296,6 +340,69 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
             setExternalRevision((revision) => revision + 1);
           }}
         />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-cost"
+        aria-labelledby="workspace-tab-cost"
+        hidden={activeTool !== "cost"}
+      >
+        <CostWorkspace document={document} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-multi-cloud"
+        aria-labelledby="workspace-tab-multi-cloud"
+        hidden={activeTool !== "multi-cloud"}
+      >
+        <MultiCloudWorkspace document={document} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-icons"
+        aria-labelledby="workspace-tab-icons"
+        hidden={activeTool !== "icons"}
+      >
+        <IconRegistryWorkspace />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-present"
+        aria-labelledby="workspace-tab-present"
+        hidden={activeTool !== "present"}
+      >
+        <PresentationWorkspace document={document} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-share"
+        aria-labelledby="workspace-tab-share"
+        hidden={activeTool !== "share"}
+      >
+        <SharingWorkspace projectId={project.id} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-comments"
+        aria-labelledby="workspace-tab-comments"
+        hidden={activeTool !== "comments"}
+      >
+        <CommentsWorkspace document={document} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="workspace-panel-approvals"
+        aria-labelledby="workspace-tab-approvals"
+        hidden={activeTool !== "approvals"}
+      >
+        <ApprovalsWorkspace document={document} />
       </div>
 
       <div

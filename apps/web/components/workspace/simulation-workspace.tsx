@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  estimateArchitectureCost,
+  scaleUsageProfileByFactor,
+  type UsageProfile,
+} from "@axon/architecture-cost";
+import {
   BASELINE_SCENARIO,
   SCENARIO_PRESETS,
   withCapacityProfile,
@@ -20,6 +25,7 @@ import { useMemo, useState } from "react";
 
 import { AssumptionControls } from "./assumption-controls";
 import { ComponentResultInspector } from "./component-result-inspector";
+import { defaultUsageFor } from "@/lib/cost/default-usage";
 import { getSimulationRepository } from "@/lib/simulation/get-simulation-repository";
 import {
   STATUS_KIND,
@@ -38,6 +44,14 @@ const FRESHNESS_TEXT: Record<SimulationFreshness, string> = {
   "model-updated": "MODEL_UPDATED · rerun to refresh the estimate",
   "assumptions-changed": "ASSUMPTIONS_CHANGED · rerun to refresh the estimate",
 };
+
+function money(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 
 export interface SimulationWorkspaceProps {
   document: ArchitectureDocument;
@@ -62,6 +76,7 @@ export function SimulationWorkspace({
   const profile: SimulationProfile = simulationState?.profile ?? initialProfile();
   const capacityProfile: CapacityProfile = profile.capacityProfile;
   const freshness = getSimulationFreshness(simulationState, document);
+  const baselineUsageProfile: UsageProfile = useMemo(() => defaultUsageFor(document), [document]);
 
   // Results are always recomputed from the document on screen — never restored
   // from storage — so a displayed estimate can never describe a stale graph.
@@ -80,6 +95,31 @@ export function SimulationWorkspace({
     });
     return compareSimulations(baseline, result);
   }, [document, result, scenario.id, capacityProfile]);
+  const scenarioCost = useMemo(() => {
+    if (result === null) return null;
+    const factor = Math.max(
+      0,
+      scenario.requestsPerSecond / Math.max(1, BASELINE_SCENARIO.requestsPerSecond),
+    );
+    const baseline = estimateArchitectureCost({
+      document,
+      provider: "aws",
+      region: "us-east-1",
+      usageProfile: baselineUsageProfile,
+    });
+    const projected = estimateArchitectureCost({
+      document,
+      provider: "aws",
+      region: "us-east-1",
+      usageProfile: scaleUsageProfileByFactor(baselineUsageProfile, factor),
+    });
+    return {
+      factor,
+      baseline,
+      projected,
+      delta: projected.expectedMonthly - baseline.expectedMonthly,
+    };
+  }, [baselineUsageProfile, document, result, scenario.requestsPerSecond]);
 
   const persist = async (nextScenario: Scenario, nextProfile: SimulationProfile) => {
     // The run recorded alongside the inputs is the one those inputs produce.
@@ -202,6 +242,41 @@ export function SimulationWorkspace({
       ) : (
         <div className="flex flex-col gap-6 xl:flex-row">
           <div className="flex min-w-0 flex-1 flex-col gap-6">
+            {scenarioCost !== null ? (
+              <section
+                className="border-2 border-border bg-surface p-4"
+                aria-label="Scenario cost impact"
+              >
+                <h2 className="type-label-caps text-foreground-muted">Scenario Cost Impact</h2>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="border-2 border-border bg-surface-muted p-3">
+                    <p className="type-label-caps text-foreground-muted">Baseline</p>
+                    <p className="type-mono-data mt-1 text-foreground">
+                      {money(scenarioCost.baseline.expectedMonthly)}
+                    </p>
+                  </div>
+                  <div className="border-2 border-border-strong bg-surface-muted p-3">
+                    <p className="type-label-caps text-foreground-muted">
+                      {scenarioCost.factor.toFixed(1)}x scenario
+                    </p>
+                    <p className="type-mono-data mt-1 text-foreground">
+                      {money(scenarioCost.projected.expectedMonthly)}
+                    </p>
+                  </div>
+                  <div className="border-2 border-border bg-surface-muted p-3">
+                    <p className="type-label-caps text-foreground-muted">Delta</p>
+                    <p className="type-mono-data mt-1 text-foreground">
+                      {scenarioCost.delta >= 0 ? "+" : ""}
+                      {money(scenarioCost.delta)}
+                    </p>
+                  </div>
+                </div>
+                <p className="type-body-sm mt-3 text-foreground-muted">
+                  AWS · us-east-1 · catalog {scenarioCost.projected.pricingCatalogVersion} ·
+                  scenario-derived usage for non-fixed drivers.
+                </p>
+              </section>
+            ) : null}
             <section aria-label="Projected constraint">
               <h2 className="type-label-caps text-foreground-muted">First projected constraint</h2>
               {result.firstConstraint === null ? (

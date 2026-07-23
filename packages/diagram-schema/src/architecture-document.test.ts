@@ -21,7 +21,13 @@ function validDocument() {
     source: { kind: "manual" },
     assumptions: [{ id: "mau", label: "Monthly active users", value: "250,000" }],
     nodes: [
-      { id: "api", name: "api-gateway", category: "Gateway", groupId: "edge" },
+      {
+        id: "api",
+        name: "api-gateway",
+        category: "Gateway",
+        groupId: "edge",
+        iconId: "aws.api-gateway",
+      },
       { id: "db", name: "postgresql", category: "Database", groupId: "data" },
     ],
     edges: [{ id: "api-db", source: "api", target: "db", kind: "data" }],
@@ -35,7 +41,8 @@ function validDocument() {
 
 describe("ArchitectureDocument schema", () => {
   it("accepts a valid document", () => {
-    expect(() => parseArchitectureDocument(validDocument())).not.toThrow();
+    const document = parseArchitectureDocument(validDocument());
+    expect(document.nodes[0]?.iconId).toBe("aws.api-gateway");
   });
 
   it("rejects unknown schema versions", () => {

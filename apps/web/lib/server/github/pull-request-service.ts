@@ -1,25 +1,43 @@
 import { and, eq, desc } from "drizzle-orm";
-import { type ArchitectureProposal } from "@axon/repo-intel";
+import {
+  buildProposal,
+  classifyFile,
+  DEFAULT_ANALYSIS_LIMITS,
+  extractEvidence,
+  type ArchitectureProposal,
+  type RepositoryEvidence,
+} from "@axon/repo-intel";
 
 import { type Database } from "../db/client";
-import { 
-  connectedRepositories, 
-  githubInstallations, 
-  githubPrAnalysisRuns, 
-  architectureProposals 
+import {
+  connectedRepositories,
+  githubInstallations,
+  githubPrAnalysisRuns,
+  architectureProposals,
 } from "../db/schema";
+import { isGithubPrOutputEnabled } from "./config";
 import { type GithubGateway } from "./gateway";
-import { 
-  generatePrReviewMarkdown, 
-  type ArchitectureRisk, 
-  type PrImpactSummary 
+import {
+  generatePrReviewMarkdown,
+  type ArchitectureRisk,
+  type PrImpactSummary,
 } from "./pr-comment-generator";
+
+/** Raised when GitHub write-back is attempted while disabled (the default). */
+export class PrOutputDisabledError extends Error {
+  constructor() {
+    super(
+      "GitHub PR output is disabled. Set AXON_GITHUB_PR_OUTPUT_ENABLED=true and grant the App write permission.",
+    );
+    this.name = "PrOutputDisabledError";
+  }
+}
 
 export class PullRequestService {
   constructor(
     private readonly db: Database,
     private readonly gateway: GithubGateway,
-    private readonly ownerId: string
+    private readonly ownerId: string,
   ) {}
 
   async listPullRequestRuns(repositoryConnectionId: string) {
@@ -29,8 +47,8 @@ export class PullRequestService {
       .where(
         and(
           eq(githubPrAnalysisRuns.repositoryConnectionId, repositoryConnectionId),
-          eq(githubPrAnalysisRuns.ownerId, this.ownerId)
-        )
+          eq(githubPrAnalysisRuns.ownerId, this.ownerId),
+        ),
       )
       .orderBy(desc(githubPrAnalysisRuns.createdAt));
   }
@@ -45,13 +63,13 @@ export class PullRequestService {
       .from(connectedRepositories)
       .innerJoin(
         githubInstallations,
-        eq(connectedRepositories.installationConnectionId, githubInstallations.id)
+        eq(connectedRepositories.installationConnectionId, githubInstallations.id),
       )
       .where(
         and(
           eq(connectedRepositories.id, repositoryConnectionId),
-          eq(connectedRepositories.ownerId, this.ownerId)
-        )
+          eq(connectedRepositories.ownerId, this.ownerId),
+        ),
       )
       .limit(1);
 
@@ -65,7 +83,7 @@ export class PullRequestService {
       installation.installationId,
       repo.ownerLogin,
       repo.name,
-      "all"
+      "all",
     );
 
     const prInfo = prList.find((p) => p.number === prNumber);
@@ -78,52 +96,59 @@ export class PullRequestService {
       installation.installationId,
       repo.ownerLogin,
       repo.name,
-      prNumber
+      prNumber,
     );
 
-    // Calculate Architecture Risk
-    let risk: ArchitectureRisk = "none";
-    let hasIac = false;
-    let hasManifests = false;
+    // Analyze the changed files: fetch each supported, non-removed file at the
+    // head commit, run the deterministic extractors, and build an evidence-backed
+    // proposal. Every component/relationship therefore references changed
+    // evidence (real file paths + extracted facts), not a file extension guess.
+    const evidence: RepositoryEvidence[] = [];
+    let examined = 0;
+    let hasInfrastructure = false;
+    const MAX_CHANGED_FILES = 50;
 
     for (const f of files) {
-      if (
-        f.filename.endsWith(".tf") ||
-        f.filename.endsWith(".hcl") ||
-        f.filename.includes("k8s/") ||
-        f.filename.endsWith(".yaml")
-      ) {
-        hasIac = true;
+      if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence || examined >= MAX_CHANGED_FILES) {
+        break;
       }
-      if (
-        f.filename.endsWith("package.json") ||
-        f.filename.endsWith("go.mod") ||
-        f.filename.endsWith("requirements.txt") ||
-        f.filename.endsWith("docker-compose.yml")
-      ) {
-        hasManifests = true;
+      if (f.status === "removed") continue;
+      const classification = classifyFile(f.filename);
+      if (!classification.supported) continue;
+
+      let content: string;
+      try {
+        content = await this.gateway.getFileText(
+          installation.installationId,
+          repo.ownerLogin,
+          repo.name,
+          f.filename,
+          headSha,
+          DEFAULT_ANALYSIS_LIMITS.maxFileBytes,
+        );
+      } catch {
+        continue; // too large / unavailable — skip safely
+      }
+      examined += 1;
+
+      const raw = extractEvidence(f.filename, classification.extractor, content);
+      for (const record of raw) {
+        if (evidence.length >= DEFAULT_ANALYSIS_LIMITS.maxEvidence) break;
+        if (record.evidenceType === "infrastructure-declaration") hasInfrastructure = true;
+        evidence.push({ ...record, id: `${f.filename}#${String(evidence.length)}` });
       }
     }
 
-    if (hasIac) {
-      risk = "high";
-    } else if (hasManifests) {
-      risk = "medium";
-    } else if (files.length > 0) {
-      risk = "low";
-    }
+    const proposal: ArchitectureProposal = buildProposal(repo.fullName, headSha, evidence);
 
-    // Build PR Architecture Proposal
-    const proposal: ArchitectureProposal = {
-      schemaVersion: "1.0",
-      sourceRepositoryFullName: repo.fullName,
-      sourceCommitSha: headSha,
-      components: [],
-      relationships: [],
-      conflicts: [],
-      unresolved: [],
-      createdAt: new Date().toISOString(),
-    };
+    // Risk derives from what actually changed (evidence), not file extensions.
+    const risk: ArchitectureRisk = hasInfrastructure
+      ? "high"
+      : proposal.components.length > 0
+        ? "medium"
+        : examined > 0
+          ? "low"
+          : "none";
 
     const insertedProposal = await this.db
       .insert(architectureProposals)
@@ -140,11 +165,11 @@ export class PullRequestService {
 
     const summary: PrImpactSummary = {
       risk,
-      addedComponentsCount: 0,
+      addedComponentsCount: proposal.components.length,
       removedComponentsCount: 0,
-      modifiedComponentsCount: 0,
-      conflictsCount: 0,
-      unresolvedCount: 0,
+      modifiedComponentsCount: proposal.relationships.length,
+      conflictsCount: proposal.conflicts.length,
+      unresolvedCount: proposal.unresolved.length,
       changedFilesCount: files.length,
     };
 
@@ -172,6 +197,12 @@ export class PullRequestService {
   }
 
   async postPrReviewComment(repositoryConnectionId: string, prNumber: number, runId: string) {
+    // Writing back to GitHub is gated: off by default, and requires a GitHub App
+    // permission upgrade. In-product review never depends on this.
+    if (!isGithubPrOutputEnabled()) {
+      throw new PrOutputDisabledError();
+    }
+
     const repoRows = await this.db
       .select({
         repo: connectedRepositories,
@@ -180,13 +211,13 @@ export class PullRequestService {
       .from(connectedRepositories)
       .innerJoin(
         githubInstallations,
-        eq(connectedRepositories.installationConnectionId, githubInstallations.id)
+        eq(connectedRepositories.installationConnectionId, githubInstallations.id),
       )
       .where(
         and(
           eq(connectedRepositories.id, repositoryConnectionId),
-          eq(connectedRepositories.ownerId, this.ownerId)
-        )
+          eq(connectedRepositories.ownerId, this.ownerId),
+        ),
       )
       .limit(1);
 
@@ -199,10 +230,7 @@ export class PullRequestService {
       .select()
       .from(githubPrAnalysisRuns)
       .where(
-        and(
-          eq(githubPrAnalysisRuns.id, runId),
-          eq(githubPrAnalysisRuns.ownerId, this.ownerId)
-        )
+        and(eq(githubPrAnalysisRuns.id, runId), eq(githubPrAnalysisRuns.ownerId, this.ownerId)),
       )
       .limit(1);
 
@@ -240,7 +268,7 @@ export class PullRequestService {
       repo.ownerLogin,
       repo.name,
       prNumber,
-      body
+      body,
     );
 
     await this.db

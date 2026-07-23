@@ -76,3 +76,13 @@ export function getGithubWebhookSecret(env: NodeJS.ProcessEnv = process.env): st
   const secret = env.GITHUB_APP_WEBHOOK_SECRET?.trim();
   return present(secret) ? secret : null;
 }
+
+/**
+ * Whether AXON is allowed to write review output back to GitHub (PR comments /
+ * Check Runs). Disabled by default — it requires an explicit opt-in AND a GitHub
+ * App permission upgrade (Pull requests / Checks: write). Analysis and in-product
+ * review never depend on this; only outbound GitHub writes do.
+ */
+export function isGithubPrOutputEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.AXON_GITHUB_PR_OUTPUT_ENABLED === "true";
+}

@@ -50,6 +50,35 @@ describe("TelemetryService (real DB)", () => {
     expect(stored).toHaveLength(2);
   });
 
+  it("calibrates from the ingested metrics, ignoring unknown metric names", async () => {
+    const { userId, projectId } = await seedProject("a@example.com");
+    const service = new TelemetryService(db, userId);
+    const sourceId = await service.registerTelemetrySource(
+      projectId,
+      "prometheus",
+      "prod",
+      "https://prom.internal/api",
+    );
+    await service.ingestMetricSamples(sourceId, [
+      { componentId: "web", metricName: "http_requests_per_second", value: 1500, unit: "req/s" },
+      { componentId: "cache", metricName: "cache_hit_percent", value: 91, unit: "percent" },
+      // An unknown metric the calibrator does not understand — must be ignored.
+      { componentId: "db", metricName: "buffer_cache_ratio", value: 0.8, unit: "ratio" },
+    ]);
+
+    const result = await service.getCalibratedCapacityProfile(projectId);
+    // Two components had usable metrics; the unknown one is not calibrated.
+    expect(result.calibratedComponentCount).toBe(2);
+    expect(result.calibratedProfile.components?.web?.requestsPerSecondPerUnit).toBe(1500);
+    expect(result.calibratedProfile.components?.cache?.cacheHitPercent).toBe(91);
+  });
+
+  it("returns an empty calibration when no telemetry has been ingested", async () => {
+    const { userId, projectId } = await seedProject("a@example.com");
+    const result = await new TelemetryService(db, userId).getCalibratedCapacityProfile(projectId);
+    expect(result.calibratedComponentCount).toBe(0);
+  });
+
   it("scopes telemetry sources by owner", async () => {
     const { userId, projectId } = await seedProject("a@example.com");
     await new TelemetryService(db, userId).registerTelemetrySource(

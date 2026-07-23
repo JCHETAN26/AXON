@@ -30,14 +30,15 @@ export async function createTestDatabase(): Promise<Database> {
 export async function resetTestDatabase(db: Database): Promise<void> {
   await db.execute(sql`
     truncate table
-      local_evidence_sync_runs, local_agent_connections,
+      cost_estimate_runs, cost_usage_assumptions,
+      local_synchronized_evidence, local_evidence_sync_runs, local_agent_connections,
       background_jobs, github_webhook_events,
       generated_infrastructure_prs, telemetry_metrics, telemetry_sources,
       cloud_discovery_runs, cloud_connections, github_pr_analysis_runs,
       architecture_drifts, architecture_snapshots,
       architecture_proposals, repository_evidence, repository_analysis_runs,
       connected_repositories, github_installations, github_install_states,
-      feedback, generation_usage, artifacts, documents, projects,
+      feedback, generation_usage, project_approvals, project_comments, project_share_links, artifacts, documents, projects,
       beta_access, beta_invites, sessions, accounts, verification_tokens, users
     restart identity cascade
   `);

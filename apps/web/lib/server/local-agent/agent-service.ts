@@ -5,7 +5,9 @@ import { type Database } from "../db/client";
 import { localAgentConnections } from "../db/schema";
 
 const TOKEN_PREFIX = "axon_agent_";
+const CREDENTIAL_PREFIX = "axon_agent_cred_";
 const TOKEN_BYTES = 32;
+const CREDENTIAL_BYTES = 32;
 const TOKEN_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for pairing
 
 export interface CreateAgentParams {
@@ -17,6 +19,7 @@ export interface CreateAgentParams {
 
 export interface AgentConnection {
   id: string;
+  ownerId?: string;
   agentName: string;
   machineLabel: string;
   workspaceScope: string;
@@ -24,6 +27,11 @@ export interface AgentConnection {
   lastConnectedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
+}
+
+export interface AgentCredential {
+  agent: AgentConnection & { ownerId: string };
+  credential: string;
 }
 
 /**
@@ -66,10 +74,63 @@ export class LocalAgentService {
   }
 
   /**
-   * Validate an agent token. Returns the agent connection if valid.
-   * Updates lastConnectedAt on successful validation. Pairing tokens are
-   * short-lived and single-use; durable agent auth must use a separate
-   * revocable credential when the local transport is wired.
+   * Exchange a short-lived pairing token for a durable revocable agent
+   * credential. The pairing token is single-use and scoped to the created
+   * agent connection; the raw credential is returned exactly once.
+   */
+  async exchangePairingToken(agentId: string, token: string): Promise<AgentCredential | null> {
+    const tokenHash = this.hashToken(token);
+
+    const rows = await this.db
+      .select()
+      .from(localAgentConnections)
+      .where(
+        and(
+          eq(localAgentConnections.id, agentId),
+          eq(localAgentConnections.tokenHash, tokenHash),
+          isNull(localAgentConnections.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    const agent = rows[0];
+    if (!agent) return null;
+    if (agent.lastConnectedAt) return null;
+
+    const expiresAt = agent.createdAt.getTime() + TOKEN_EXPIRY_MS;
+    if (Date.now() > expiresAt) return null;
+
+    const credential = `${CREDENTIAL_PREFIX}${randomBytes(CREDENTIAL_BYTES).toString("hex")}`;
+    const credentialHash = this.hashToken(credential);
+    const connectedAt = new Date();
+    await this.db
+      .update(localAgentConnections)
+      .set({
+        credentialHash,
+        credentialIssuedAt: connectedAt,
+        lastConnectedAt: connectedAt,
+      })
+      .where(eq(localAgentConnections.id, agent.id));
+
+    return {
+      credential,
+      agent: {
+        id: agent.id,
+        ownerId: agent.ownerId,
+        agentName: agent.agentName,
+        machineLabel: agent.machineLabel,
+        workspaceScope: agent.workspaceScope,
+        allowedCapabilities: agent.allowedCapabilities as string[],
+        lastConnectedAt: connectedAt,
+        revokedAt: null,
+        createdAt: agent.createdAt,
+      },
+    };
+  }
+
+  /**
+   * Backward-compatible pairing validation used by older tests/callers.
+   * Prefer exchangePairingToken for real local-agent authentication.
    */
   async validateToken(token: string): Promise<AgentConnection | null> {
     const tokenHash = this.hashToken(token);
@@ -93,7 +154,6 @@ export class LocalAgentService {
     const expiresAt = agent.createdAt.getTime() + TOKEN_EXPIRY_MS;
     if (Date.now() > expiresAt) return null;
 
-    // Update last connected timestamp
     const connectedAt = new Date();
     await this.db
       .update(localAgentConnections)
@@ -102,6 +162,47 @@ export class LocalAgentService {
 
     return {
       id: agent.id,
+      agentName: agent.agentName,
+      machineLabel: agent.machineLabel,
+      workspaceScope: agent.workspaceScope,
+      allowedCapabilities: agent.allowedCapabilities as string[],
+      lastConnectedAt: connectedAt,
+      revokedAt: null,
+      createdAt: agent.createdAt,
+    };
+  }
+
+  async authenticateCredential(
+    agentId: string,
+    credential: string,
+  ): Promise<(AgentConnection & { ownerId: string }) | null> {
+    if (!credential.startsWith(CREDENTIAL_PREFIX)) return null;
+
+    const credentialHash = this.hashToken(credential);
+    const rows = await this.db
+      .select()
+      .from(localAgentConnections)
+      .where(
+        and(
+          eq(localAgentConnections.id, agentId),
+          eq(localAgentConnections.credentialHash, credentialHash),
+          isNull(localAgentConnections.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    const agent = rows[0];
+    if (!agent) return null;
+
+    const connectedAt = new Date();
+    await this.db
+      .update(localAgentConnections)
+      .set({ lastConnectedAt: connectedAt })
+      .where(eq(localAgentConnections.id, agent.id));
+
+    return {
+      id: agent.id,
+      ownerId: agent.ownerId,
       agentName: agent.agentName,
       machineLabel: agent.machineLabel,
       workspaceScope: agent.workspaceScope,

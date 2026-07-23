@@ -2,7 +2,11 @@ import { and, eq, desc } from "drizzle-orm";
 import { type RepositoryEvidence, type ArchitectureProposal } from "@axon/repo-intel";
 
 import { type Database } from "../db/client";
-import { localAgentConnections, localEvidenceSyncRuns } from "../db/schema";
+import {
+  localAgentConnections,
+  localEvidenceSyncRuns,
+  localSynchronizedEvidence,
+} from "../db/schema";
 
 export interface SyncReviewItem {
   evidenceId: string;
@@ -19,6 +23,8 @@ export interface EvidenceSyncRequest {
   evidence: RepositoryEvidence[];
   proposal: ArchitectureProposal;
   excludedEvidenceIds?: string[];
+  localAnalysisVersion?: string;
+  localWorkspaceSnapshotId?: string;
 }
 
 export interface SyncRunRecord {
@@ -70,7 +76,9 @@ export class EvidenceSyncService {
    * Submit approved evidence for synchronization.
    * Creates a sync run record but does NOT automatically update hosted architecture.
    */
-  async submitSync(request: EvidenceSyncRequest): Promise<{ syncRunId: string }> {
+  async submitSync(
+    request: EvidenceSyncRequest,
+  ): Promise<{ syncRunId: string; persistedEvidenceCount: number }> {
     // Verify agent connection is valid and not revoked
     const agentRows = await this.db
       .select()
@@ -86,6 +94,13 @@ export class EvidenceSyncService {
     const agent = agentRows[0];
     if (!agent) throw new Error("Agent connection not found");
     if (agent.revokedAt) throw new Error("Agent connection has been revoked");
+    if (
+      request.projectId !== undefined &&
+      agent.workspaceScope !== "*" &&
+      agent.workspaceScope !== request.projectId
+    ) {
+      throw new Error("Agent connection is not scoped to this project");
+    }
 
     // Filter out excluded evidence
     const excludedSet = new Set(request.excludedEvidenceIds ?? []);
@@ -93,6 +108,7 @@ export class EvidenceSyncService {
 
     const componentCount = request.proposal.components.length;
 
+    const syncedAt = new Date();
     const inserted = await this.db
       .insert(localEvidenceSyncRuns)
       .values({
@@ -102,14 +118,41 @@ export class EvidenceSyncService {
         evidenceCount: includedEvidence.length,
         componentCount,
         status: "synced",
-        syncedAt: new Date(),
+        syncedAt,
       })
       .returning({ id: localEvidenceSyncRuns.id });
 
     const syncRunId = inserted[0]?.id;
     if (!syncRunId) throw new Error("Failed to create sync run record");
 
-    return { syncRunId };
+    if (includedEvidence.length > 0) {
+      await this.db.insert(localSynchronizedEvidence).values(
+        includedEvidence.map((ev) => ({
+          ownerId: this.ownerId,
+          syncRunId,
+          agentConnectionId: request.agentConnectionId,
+          projectId: request.projectId ?? null,
+          localEvidenceId: ev.id,
+          filePath: ev.filePath,
+          startLine: ev.startLine,
+          endLine: ev.endLine,
+          evidenceType: ev.evidenceType,
+          extractor: ev.extractor,
+          excerpt: ev.excerpt,
+          fact: ev.fact,
+          confidence: ev.confidence,
+          provenance: "locally-observed",
+          redactionStatus: ev.excerpt ? "redacted-excerpt" : "no-excerpt",
+          localAnalysisVersion: request.localAnalysisVersion ?? "repo-intel-local",
+          localWorkspaceSnapshotId:
+            request.localWorkspaceSnapshotId ?? request.proposal.sourceCommitSha,
+          rawSourceRetained: false,
+          syncedAt,
+        })),
+      );
+    }
+
+    return { syncRunId, persistedEvidenceCount: includedEvidence.length };
   }
 
   /**

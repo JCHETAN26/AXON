@@ -4,6 +4,7 @@ import { type ArchitectureGroupModel } from "@axon/diagram-schema";
 import { Button, cx } from "@axon/ui";
 
 import { type ArchitectureNodeDataPatch, type CanvasNode } from "@/lib/canvas/adapters";
+import { ARCHITECTURE_ICON_REGISTRY } from "@/lib/icons/architecture-icon-registry";
 
 const FIELD_CLASSES = cx(
   "type-body-md mt-1.5 w-full rounded-control border-2 border-border-strong bg-surface px-2.5 py-2",
@@ -87,6 +88,26 @@ export function NodeInspector({ node, groups, onChange, onDelete }: NodeInspecto
           }}
           className={FIELD_CLASSES}
         />
+      </div>
+      <div>
+        <label htmlFor="inspector-node-icon" className="type-label-caps text-foreground-muted">
+          Icon
+        </label>
+        <select
+          id="inspector-node-icon"
+          value={node.data.iconId ?? ""}
+          onChange={(event) => {
+            onChange({ iconId: event.target.value === "" ? undefined : event.target.value });
+          }}
+          className={FIELD_CLASSES}
+        >
+          <option value="">Auto</option>
+          {ARCHITECTURE_ICON_REGISTRY.map((icon) => (
+            <option key={icon.id} value={icon.id}>
+              {icon.service} ({icon.provider})
+            </option>
+          ))}
+        </select>
       </div>
       <label htmlFor="inspector-node-planned" className="flex cursor-pointer items-center gap-2.5">
         <input

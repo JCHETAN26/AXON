@@ -1,5 +1,6 @@
 import { cx } from "./cx";
 import { LockIcon } from "./icons";
+import { type ReactNode } from "react";
 
 export type ArchitectureNodeState = "default" | "selected" | "critical" | "recommended" | "planned";
 
@@ -15,6 +16,7 @@ export interface ArchitectureNodeProps {
   state?: ArchitectureNodeState;
   health?: ArchitectureNodeHealth;
   locked?: boolean;
+  icon?: ReactNode;
   className?: string;
 }
 
@@ -61,6 +63,7 @@ export function ArchitectureNode({
   state = "default",
   health,
   locked = false,
+  icon,
   className,
 }: ArchitectureNodeProps) {
   const stateMeta = state === "default" ? null : STATE_META[state];
@@ -77,7 +80,12 @@ export function ArchitectureNode({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="type-label-caps text-foreground-muted">{category}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {icon !== undefined ? (
+            <span className="shrink-0 text-foreground-muted">{icon}</span>
+          ) : null}
+          <span className="type-label-caps truncate text-foreground-muted">{category}</span>
+        </span>
         <span className="flex items-center gap-1.5">
           {locked ? (
             <span className="text-foreground-muted" title="Locked">

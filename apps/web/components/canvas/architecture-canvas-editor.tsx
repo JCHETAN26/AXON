@@ -34,7 +34,13 @@ import { ArchitectureFlowNode } from "./architecture-flow-node";
 import { EdgeInspector } from "./edge-inspector";
 import { NodeInspector } from "./node-inspector";
 import {
+  renderArchitectureHtml,
+  renderArchitecturePngBlob,
+  renderArchitectureSvg,
+} from "@/lib/canvas/export-svg";
+import {
   canvasStateToDocument,
+  computeArchitectureAwareLayout,
   createUniqueEdgeId,
   createUniqueNodeId,
   documentToCanvasState,
@@ -93,6 +99,24 @@ function ToolbarGlyph({ path }: { path: string }) {
   );
 }
 
+function downloadTextFile(filename: string, contents: string, mimeType: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBlobFile(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface ArchitectureCanvasEditorProps {
   projectId: string;
   /** Initial document; the editor owns canvas state from here on. */
@@ -117,8 +141,11 @@ function CanvasEditorInner({
 
   const lastSavedRef = useRef(initialDocument);
   const hydratedRef = useRef(false);
+  const layoutPreviewBeforeRef = useRef<CanvasNode[] | null>(null);
+  const suppressNextAutosaveRef = useRef(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [layoutPreviewActive, setLayoutPreviewActive] = useState(false);
 
   const persist = useCallback(
     async (currentNodes: readonly CanvasNode[], currentEdges: readonly CanvasEdge[]) => {
@@ -194,6 +221,13 @@ function CanvasEditorInner({
   useEffect(() => {
     if (!hydratedRef.current) {
       hydratedRef.current = true;
+      return;
+    }
+    if (suppressNextAutosaveRef.current) {
+      suppressNextAutosaveRef.current = false;
+      return;
+    }
+    if (layoutPreviewBeforeRef.current !== null) {
       return;
     }
     setSaveState((state) => (state === "saving" ? state : "pending"));
@@ -287,6 +321,79 @@ function CanvasEditorInner({
     setEdges((current) => current.map((edge) => ({ ...edge, selected: false })));
   }, []);
 
+  const previewLayout = useCallback(() => {
+    setNodes((current) => {
+      layoutPreviewBeforeRef.current = current;
+      const candidate = canvasStateToDocument(
+        lastSavedRef.current,
+        current,
+        edges,
+        new Date().toISOString(),
+      );
+      const layout = computeArchitectureAwareLayout(candidate, {
+        preserveExistingPositions: false,
+      });
+      return current.map((node) => ({
+        ...node,
+        position: layout.get(node.id) ?? node.position,
+      }));
+    });
+    setLayoutPreviewActive(true);
+  }, [edges]);
+
+  const cancelLayoutPreview = useCallback(() => {
+    const before = layoutPreviewBeforeRef.current;
+    if (before === null) return;
+    layoutPreviewBeforeRef.current = null;
+    suppressNextAutosaveRef.current = true;
+    setLayoutPreviewActive(false);
+    setNodes(before);
+  }, []);
+
+  const applyLayoutPreview = useCallback(() => {
+    if (layoutPreviewBeforeRef.current === null) return;
+    layoutPreviewBeforeRef.current = null;
+    setLayoutPreviewActive(false);
+    void persist(nodes, edges);
+  }, [edges, nodes, persist]);
+
+  const exportSvg = useCallback(() => {
+    const currentDocument = canvasStateToDocument(
+      lastSavedRef.current,
+      nodes,
+      edges,
+      new Date().toISOString(),
+    );
+    const svg = renderArchitectureSvg(currentDocument);
+    downloadTextFile(`${projectId}-architecture.svg`, svg, "image/svg+xml");
+  }, [edges, nodes, projectId]);
+
+  const exportPng = useCallback(() => {
+    const currentDocument = canvasStateToDocument(
+      lastSavedRef.current,
+      nodes,
+      edges,
+      new Date().toISOString(),
+    );
+    void renderArchitecturePngBlob(currentDocument).then((blob) => {
+      downloadBlobFile(`${projectId}-architecture.png`, blob);
+    });
+  }, [edges, nodes, projectId]);
+
+  const exportHtml = useCallback(() => {
+    const currentDocument = canvasStateToDocument(
+      lastSavedRef.current,
+      nodes,
+      edges,
+      new Date().toISOString(),
+    );
+    downloadTextFile(
+      `${projectId}-architecture.html`,
+      renderArchitectureHtml(currentDocument),
+      "text/html;charset=utf-8",
+    );
+  }, [edges, nodes, projectId]);
+
   const selectedNodes = nodes.filter((node) => node.selected === true);
   const selectedEdges = edges.filter((edge) => edge.selected === true);
   const selectionCount = selectedNodes.length + selectedEdges.length;
@@ -340,6 +447,20 @@ function CanvasEditorInner({
           <Button variant="technical" size="sm" onClick={addNode}>
             Add Node
           </Button>
+          {!layoutPreviewActive ? (
+            <Button variant="technical" size="sm" onClick={previewLayout}>
+              Preview Layout
+            </Button>
+          ) : (
+            <>
+              <Button variant="technical" size="sm" onClick={applyLayoutPreview}>
+                Apply Layout
+              </Button>
+              <Button variant="technical" size="sm" onClick={cancelLayoutPreview}>
+                Cancel Layout
+              </Button>
+            </>
+          )}
           <CanvasToolbarSeparator />
           <CanvasToolbarButton
             label="Zoom in"
@@ -373,6 +494,15 @@ function CanvasEditorInner({
             disabled={selectionCount === 0}
           >
             Delete Selected
+          </Button>
+          <Button variant="technical" size="sm" onClick={exportSvg}>
+            Export SVG
+          </Button>
+          <Button variant="technical" size="sm" onClick={exportPng}>
+            Export PNG
+          </Button>
+          <Button variant="technical" size="sm" onClick={exportHtml}>
+            Export HTML
           </Button>
           <Button
             variant="technical"

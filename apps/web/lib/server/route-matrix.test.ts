@@ -57,8 +57,19 @@ describe("route-protection matrix", () => {
     expect(dev?.apiEnforced).toBe(true);
   });
 
+  it("marks share-link routes as token-enforced but not proxy protected", () => {
+    for (const pattern of ["/share/[token]", "/api/share/[token]"]) {
+      const entry = ROUTE_MATRIX.find((route) => route.pattern === pattern);
+      expect(entry?.class).toBe("share-link");
+      expect(entry?.proxyProtected).toBe(false);
+      expect(entry?.apiEnforced).toBe(true);
+    }
+  });
+
   it("enforces authorization on every connection API and the install callback", () => {
-    for (const entry of ROUTE_MATRIX.filter((route) => route.pattern.startsWith("/api/connections"))) {
+    for (const entry of ROUTE_MATRIX.filter((route) =>
+      route.pattern.startsWith("/api/connections"),
+    )) {
       expect(entry.apiEnforced).toBe(true);
     }
     const callback = ROUTE_MATRIX.find(

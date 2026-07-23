@@ -19,6 +19,7 @@
     "@axon/repo-intel": "workspace:*",
     "@axon/architecture-audit": "workspace:*",
     "@axon/architecture-simulation": "workspace:*",
+    "@axon/architecture-cost": "workspace:*",
     "@axon/diagram-schema": "workspace:*",
     "zod": "^4.4.3"
   },

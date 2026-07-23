@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { estimateArchitectureCost } from "@axon/architecture-cost";
 import { type ArchitectureDocument } from "@axon/diagram-schema";
 import { type AwsToGcpMigrationResult, transformAwsToGcp } from "@axon/repo-intel";
 import { StatusBadge } from "@axon/ui";
+
+import { defaultUsageFor } from "@/lib/cost/default-usage";
 
 export interface AwsToGcpMigrationWorkspaceProps {
   projectId: string;
@@ -11,12 +14,20 @@ export interface AwsToGcpMigrationWorkspaceProps {
   onApplyTargetProposal: (result: AwsToGcpMigrationResult) => Promise<void>;
 }
 
+function money(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export function AwsToGcpMigrationWorkspace({
   document,
   onApplyTargetProposal,
 }: AwsToGcpMigrationWorkspaceProps) {
   const [migrationResult, setMigrationResult] = useState<AwsToGcpMigrationResult>(() =>
-    transformAwsToGcp(document)
+    transformAwsToGcp(document),
   );
   const [busy, setBusy] = useState(false);
 
@@ -33,10 +44,59 @@ export function AwsToGcpMigrationWorkspace({
     }
   };
 
-  const { targetProposal, mappedComponentsCount, unmappedComponentsCount, averageEquivalenceScore, residualRisks } =
-    migrationResult;
+  const {
+    targetProposal,
+    mappedComponentsCount,
+    unmappedComponentsCount,
+    averageEquivalenceScore,
+    residualRisks,
+  } = migrationResult;
 
   const scorePct = Math.round(averageEquivalenceScore * 100);
+  const targetDocument = useMemo<ArchitectureDocument>(
+    () => ({
+      ...document,
+      id: `${document.id}-gcp-target`,
+      name: `${document.name} GCP target`,
+      nodes: targetProposal.components.map((component) => ({
+        id: component.id,
+        name: component.name,
+        category: component.category,
+        meta: component.technology,
+      })),
+      edges: targetProposal.relationships.map((relationship) => ({
+        id: relationship.id,
+        source: relationship.source,
+        target: relationship.target,
+        kind: relationship.kind,
+      })),
+      groups: [],
+      updatedAt: targetProposal.createdAt,
+      metadata: { ...document.metadata, migrationTarget: "gcp" },
+    }),
+    [document, targetProposal],
+  );
+  const sourceCost = useMemo(
+    () =>
+      estimateArchitectureCost({
+        document,
+        provider: "aws",
+        region: "us-east-1",
+        usageProfile: defaultUsageFor(document),
+      }),
+    [document],
+  );
+  const targetCost = useMemo(
+    () =>
+      estimateArchitectureCost({
+        document: targetDocument,
+        provider: "gcp",
+        region: "us-central1",
+        usageProfile: defaultUsageFor(targetDocument),
+      }),
+    [targetDocument],
+  );
+  const costDelta = targetCost.expectedMonthly - sourceCost.expectedMonthly;
 
   return (
     <div className="flex flex-col gap-6 font-sans">
@@ -47,7 +107,8 @@ export function AwsToGcpMigrationWorkspace({
             AWS to GCP Infrastructure Migration Workspace
           </h2>
           <p className="type-mono-data mt-1 text-foreground-muted">
-            Source Architecture: <span className="text-accent">{document.name}</span> · Direct Equivalence Score: <strong className="text-success">{scorePct}%</strong>
+            Source Architecture: <span className="text-accent">{document.name}</span> · Direct
+            Equivalence Score: <strong className="text-success">{scorePct}%</strong>
           </p>
         </div>
 
@@ -91,6 +152,38 @@ export function AwsToGcpMigrationWorkspace({
         </div>
       </div>
 
+      <section
+        className="border-2 border-border bg-surface p-4"
+        aria-label="Migration cost comparison"
+      >
+        <h3 className="type-label-caps text-foreground-muted">Migration Cost Comparison</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="border-2 border-border bg-surface-muted p-3">
+            <p className="type-label-caps text-foreground-muted">Current AWS</p>
+            <p className="type-mono-data mt-1 text-foreground">
+              {money(sourceCost.expectedMonthly)}
+            </p>
+          </div>
+          <div className="border-2 border-border-strong bg-surface-muted p-3">
+            <p className="type-label-caps text-foreground-muted">Target GCP</p>
+            <p className="type-mono-data mt-1 text-foreground">
+              {money(targetCost.expectedMonthly)}
+            </p>
+          </div>
+          <div className="border-2 border-border bg-surface-muted p-3">
+            <p className="type-label-caps text-foreground-muted">Modeled Delta</p>
+            <p className="type-mono-data mt-1 text-foreground">
+              {costDelta >= 0 ? "+" : ""}
+              {money(costDelta)}
+            </p>
+          </div>
+        </div>
+        <p className="type-body-sm mt-3 text-foreground-muted">
+          AWS us-east-1 → GCP us-central1 · catalog {targetCost.pricingCatalogVersion} · modeled
+          comparison only, not a provider invoice.
+        </p>
+      </section>
+
       {/* Main Component Mapping Layout */}
       <div className="flex flex-col gap-6 xl:flex-row">
         {/* Component Mappings Catalog */}
@@ -105,7 +198,10 @@ export function AwsToGcpMigrationWorkspace({
                 const originalNode = document.nodes.find((n) => `gcp-${n.id}` === gcpComp.id);
 
                 return (
-                  <li key={gcpComp.id} className="border-2 border-border p-4 flex flex-col gap-2 bg-surface">
+                  <li
+                    key={gcpComp.id}
+                    className="border-2 border-border p-4 flex flex-col gap-2 bg-surface"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <span className="type-body-md font-semibold text-foreground">
@@ -147,7 +243,10 @@ export function AwsToGcpMigrationWorkspace({
           ) : (
             <ul className="mt-4 flex flex-col gap-3">
               {residualRisks.map((risk, i) => (
-                <li key={i} className="border border-border p-3 text-xs type-mono-data text-foreground-muted bg-surface-muted">
+                <li
+                  key={i}
+                  className="border border-border p-3 text-xs type-mono-data text-foreground-muted bg-surface-muted"
+                >
                   ⚠️ {risk}
                 </li>
               ))}

@@ -33,4 +33,16 @@ describe("ArchitectureNode", () => {
     render(<ArchitectureNode category="Cache" name="redis" health="degraded" />);
     expect(screen.getByText("Health: Degraded")).toBeInTheDocument();
   });
+
+  it("renders an optional icon slot without replacing the text label", () => {
+    render(
+      <ArchitectureNode
+        category="Compute"
+        name="api"
+        icon={<span aria-label="Compute icon">C</span>}
+      />,
+    );
+    expect(screen.getByLabelText("Compute icon")).toBeVisible();
+    expect(screen.getByText("Compute")).toBeVisible();
+  });
 });

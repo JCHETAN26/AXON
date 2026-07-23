@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PullRequestService } from "./pull-request-service";
-import { type GithubGateway } from "./gateway";
+import { PullRequestService, PrOutputDisabledError } from "./pull-request-service";
+import { GithubError, type GithubGateway } from "./gateway";
 import { type Database } from "../db/client";
 import { createTestDatabase, resetTestDatabase } from "../db/testing";
 import { ServerGithubRepository } from "../repositories/server-github-repository";
@@ -14,19 +14,47 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await resetTestDatabase(db);
+  delete process.env.AXON_GITHUB_PR_OUTPUT_ENABLED;
 });
 
-function fakeGateway(files: { filename: string }[]): GithubGateway {
+/** A gateway with a fixed PR, changed-file list, and file contents. */
+function fakeGateway(
+  files: { filename: string; status?: "added" | "modified" | "removed" | "renamed" }[],
+  contents: Record<string, string> = {},
+): GithubGateway {
   return {
     verifyInstallation: vi.fn(),
     listInstallationRepositories: vi.fn(),
     getBranchHeadSha: vi.fn(),
     getTree: vi.fn(),
-    getFileText: vi.fn(),
-    listPullRequests: vi.fn().mockResolvedValue([
-      { number: 7, title: "Add infra", author: "dev", state: "open", headSha: "h7", baseSha: "b7", createdAt: "" },
-    ]),
-    getPullRequestFiles: vi.fn().mockResolvedValue(files),
+    getFileText: vi.fn((_i, _o, _r, path: string) => {
+      const c = contents[path];
+      if (c === undefined) return Promise.reject(new GithubError("not-found"));
+      return Promise.resolve(c);
+    }),
+    listPullRequests: vi
+      .fn()
+      .mockResolvedValue([
+        {
+          number: 7,
+          title: "Add db",
+          author: "dev",
+          state: "open",
+          headSha: "h7",
+          baseSha: "b7",
+          createdAt: "",
+        },
+      ]),
+    getPullRequestFiles: vi
+      .fn()
+      .mockResolvedValue(
+        files.map((f) => ({
+          filename: f.filename,
+          status: f.status ?? "modified",
+          additions: 1,
+          deletions: 0,
+        })),
+      ),
     postPullRequestComment: vi.fn().mockResolvedValue(undefined),
     createBranchAndPullRequest: vi.fn(),
   } as unknown as GithubGateway;
@@ -56,29 +84,60 @@ async function seedRepo(email: string): Promise<{ userId: string; repoConnId: st
   return { userId, repoConnId: repo.id };
 }
 
-describe("PullRequestService (real DB)", () => {
-  it("analyzes a PR, records a run, and rates IaC changes high risk", async () => {
+describe("PullRequestService (real DB, evidence-based)", () => {
+  it("extracts real evidence from changed files and derives risk from it", async () => {
     const { userId, repoConnId } = await seedRepo("a@example.com");
-    const service = new PullRequestService(db, fakeGateway([{ filename: "infra/main.tf" }]), userId);
+    // A changed package.json that declares a PostgreSQL client.
+    const gateway = fakeGateway([{ filename: "package.json" }], {
+      "package.json": JSON.stringify({ dependencies: { pg: "^8.0.0" } }),
+    });
+    const service = new PullRequestService(db, gateway, userId);
 
-    const { runId, summary } = await service.analyzePullRequest(repoConnId, 7);
-    expect(runId).toBeTruthy();
-    expect(summary.risk).toBe("high");
-    expect(summary.changedFilesCount).toBe(1);
+    const { summary, proposal } = await service.analyzePullRequest(repoConnId, 7);
+    // The proposal is evidence-backed (not empty), and risk reflects real content.
+    expect(proposal.components.length).toBeGreaterThanOrEqual(1);
+    expect(summary.addedComponentsCount).toBe(proposal.components.length);
+    expect(summary.risk).toBe("medium");
+    // Every component cites evidence.
+    expect(proposal.components.every((c) => c.evidenceIds.length > 0)).toBe(true);
 
     const runs = await service.listPullRequestRuns(repoConnId);
     expect(runs).toHaveLength(1);
-    expect(runs[0]?.prNumber).toBe(7);
+  });
+
+  it("rates a PR with no supported changes as no-risk with an empty proposal", async () => {
+    const { userId, repoConnId } = await seedRepo("a@example.com");
+    const gateway = fakeGateway([{ filename: "README.md" }]);
+    const { summary, proposal } = await new PullRequestService(
+      db,
+      gateway,
+      userId,
+    ).analyzePullRequest(repoConnId, 7);
+    expect(proposal.components).toHaveLength(0);
+    expect(summary.risk).toBe("none");
   });
 
   it("does not let another user analyze a repo they do not own", async () => {
     const { repoConnId } = await seedRepo("a@example.com");
     const intruder = new PullRequestService(
       db,
-      fakeGateway([{ filename: "src/x.ts" }]),
+      fakeGateway([{ filename: "package.json" }]),
       await seedUser(db, "b@example.com"),
     );
     await expect(intruder.analyzePullRequest(repoConnId, 7)).rejects.toThrow(/not found/i);
-    expect(await intruder.listPullRequestRuns(repoConnId)).toHaveLength(0);
+  });
+
+  it("refuses to post a GitHub comment while write-back is disabled (the default)", async () => {
+    const { userId, repoConnId } = await seedRepo("a@example.com");
+    const gateway = fakeGateway([{ filename: "package.json" }], {
+      "package.json": JSON.stringify({ dependencies: { pg: "^8" } }),
+    });
+    const service = new PullRequestService(db, gateway, userId);
+    const { runId } = await service.analyzePullRequest(repoConnId, 7);
+
+    await expect(service.postPrReviewComment(repoConnId, 7, runId)).rejects.toBeInstanceOf(
+      PrOutputDisabledError,
+    );
+    expect(gateway.postPullRequestComment).not.toHaveBeenCalled();
   });
 });

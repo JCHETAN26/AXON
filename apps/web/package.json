@@ -25,6 +25,7 @@
     "@axon/architecture-compose-import": "workspace:*",
     "@axon/architecture-generation": "workspace:*",
     "@axon/architecture-recommendations": "workspace:*",
+    "@axon/architecture-cost": "workspace:*",
     "@axon/architecture-simulation": "workspace:*",
     "@axon/diagram-schema": "workspace:*",
     "@axon/repo-intel": "workspace:*",

@@ -11,6 +11,8 @@ export type RouteClass =
   | "invite" // authenticated, not beta-gated
   | "beta-page" // authenticated + beta-gated product page
   | "owner-api" // authenticated + beta + owner-scoped
+  | "share-link" // public route authenticated by an unguessable share token
+  | "local-agent-api" // local agent bearer credential; no browser session required
   | "github-callback" // authenticated + beta; validates signed single-use state
   | "github-webhook" // public endpoint; authenticated by HMAC signature only
   | "internal-api" // dev/test only, fail-closed in production
@@ -53,8 +55,19 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
     proxyProtected: true,
     apiEnforced: false,
   },
+  {
+    pattern: "/share/[token]",
+    class: "share-link",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
   { pattern: "/account", class: "beta-page", proxyProtected: true, apiEnforced: false },
-  { pattern: "/settings/connections", class: "beta-page", proxyProtected: true, apiEnforced: false },
+  {
+    pattern: "/settings/connections",
+    class: "beta-page",
+    proxyProtected: true,
+    apiEnforced: false,
+  },
 
   { pattern: "/api/projects", class: "owner-api", proxyProtected: false, apiEnforced: true },
   {
@@ -70,8 +83,62 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
     apiEnforced: true,
   },
   {
+    pattern: "/api/projects/[projectId]/approvals",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/approvals/[approvalId]",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/cost/estimate",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/cost/estimates",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/comments",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/comments/[commentId]",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
     pattern: "/api/projects/[projectId]/export",
     class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/share-links",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/projects/[projectId]/share-links/[shareLinkId]",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/share/[token]",
+    class: "share-link",
     proxyProtected: false,
     apiEnforced: true,
   },
@@ -80,6 +147,25 @@ export const ROUTE_MATRIX: readonly RouteEntry[] = [
   { pattern: "/api/feedback", class: "owner-api", proxyProtected: false, apiEnforced: true },
   { pattern: "/api/account/export", class: "owner-api", proxyProtected: false, apiEnforced: true },
   { pattern: "/api/account", class: "owner-api", proxyProtected: false, apiEnforced: true },
+  { pattern: "/api/local-agents", class: "owner-api", proxyProtected: false, apiEnforced: true },
+  {
+    pattern: "/api/local-agents/[agentId]",
+    class: "owner-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/local-agents/[agentId]/auth",
+    class: "local-agent-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
+  {
+    pattern: "/api/local-agents/[agentId]/sync",
+    class: "local-agent-api",
+    proxyProtected: false,
+    apiEnforced: true,
+  },
 
   { pattern: "/api/connections", class: "owner-api", proxyProtected: false, apiEnforced: true },
   {
@@ -128,6 +214,8 @@ export const PROXY_PUBLIC_PREFIXES = [
   "/api/health",
   "/api/ready",
   "/api/github/webhook",
+  "/api/share",
+  "/share",
 ];
 
 /** Prefixes the edge proxy protects (requires a session) in cloud mode. */

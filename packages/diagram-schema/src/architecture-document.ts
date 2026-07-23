@@ -32,6 +32,8 @@ export const ArchitectureNodeModelSchema = z.object({
   groupId: nonEmptyString.optional(),
   /** Compact technical annotation shown on the node. */
   meta: nonEmptyString.optional(),
+  /** Optional explicit visual icon registry id. Heuristic resolution is used when omitted. */
+  iconId: nonEmptyString.optional(),
   /** Planned nodes are part of the target design, not the running system. */
   planned: z.boolean().optional(),
   /** Canvas position assigned by AXON layout — never by a model. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canvasStateToDocument,
+  computeArchitectureAwareLayout,
   createUniqueEdgeId,
   createUniqueNodeId,
   documentToCanvasState,
@@ -32,6 +33,7 @@ function fixtureDocument(withPositions: boolean): ArchitectureDocument {
         name: "api-gateway",
         category: "Gateway",
         groupId: "edge",
+        iconId: "aws.api-gateway",
         ...(withPositions && { position: { x: 100, y: 200 } }),
       },
       {
@@ -55,6 +57,7 @@ describe("documentToCanvasState", () => {
     expect(state.nodes).toHaveLength(3);
     expect(state.nodes[0]?.position).toEqual({ x: 100, y: 200 });
     expect(state.nodes[0]?.data.name).toBe("api-gateway");
+    expect(state.nodes[0]?.data.iconId).toBe("aws.api-gateway");
     expect(state.edges[0]?.data?.kind).toBe("data");
     expect(state.edges[0]?.type).toBe("architecture");
   });
@@ -65,12 +68,12 @@ describe("documentToCanvasState", () => {
     expect(first.nodes.map((node) => node.position)).toEqual(
       second.nodes.map((node) => node.position),
     );
-    // Grouped nodes land in group columns; ungrouped trail after.
+    // Directed dependencies flow left-to-right.
     const gateway = first.nodes.find((node) => node.id === "gateway");
-    const misc = first.nodes.find((node) => node.id === "misc");
-    expect(
-      misc !== undefined && gateway !== undefined && misc.position.x > gateway.position.x,
-    ).toBe(true);
+    const db = first.nodes.find((node) => node.id === "db");
+    expect(db !== undefined && gateway !== undefined && db.position.x > gateway.position.x).toBe(
+      true,
+    );
   });
 
   it("does not mutate the source document", () => {
@@ -79,6 +82,22 @@ describe("documentToCanvasState", () => {
     Object.freeze(document.nodes);
     expect(() => documentToCanvasState(document)).not.toThrow();
     expect(document.nodes[0]?.position).toBeUndefined();
+  });
+});
+
+describe("computeArchitectureAwareLayout", () => {
+  it("preserves existing user positions by default", () => {
+    const document = fixtureDocument(true);
+    const layout = computeArchitectureAwareLayout(document);
+    expect(layout.get("gateway")).toEqual({ x: 100, y: 200 });
+  });
+
+  it("can produce a full deterministic preview layout", () => {
+    const document = fixtureDocument(true);
+    const first = computeArchitectureAwareLayout(document, { preserveExistingPositions: false });
+    const second = computeArchitectureAwareLayout(document, { preserveExistingPositions: false });
+    expect([...first.entries()]).toEqual([...second.entries()]);
+    expect(first.get("db")?.x).toBeGreaterThan(first.get("gateway")?.x ?? 0);
   });
 });
 
@@ -95,6 +114,7 @@ describe("canvasStateToDocument", () => {
     expect(next.updatedAt).toBe(LATER);
     expect(next.createdAt).toBe(previous.createdAt);
     expect(next.nodes.find((node) => node.id === "gateway")?.position).toEqual({ x: 124, y: 456 });
+    expect(next.nodes.find((node) => node.id === "gateway")?.iconId).toBe("aws.api-gateway");
     expect(next.nodes.find((node) => node.id === "db")?.meta).toBe("conn 82/300");
     expect(next.assumptions).toEqual(previous.assumptions);
     expect(next.groups).toEqual(previous.groups);

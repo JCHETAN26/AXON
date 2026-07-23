@@ -43,6 +43,18 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("tab", { name: "Canvas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Audit" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Simulate" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Multi-cloud" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: "Icons" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Present" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Share" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Approvals" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
     expect(screen.getByRole("tab", { name: "Recommend" })).toHaveAttribute(
       "aria-selected",
       "false",
@@ -53,6 +65,101 @@ describe("WorkspaceShell", () => {
     // The editor surface is present with its save state.
     expect(screen.getByRole("status", { name: "Save status" })).toHaveTextContent(/SAVED/);
     expect(screen.getByRole("toolbar", { name: "Canvas tools" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview Layout" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Export SVG" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Export PNG" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Export HTML" })).toBeVisible();
+  });
+
+  it("switches to the icon registry workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Icon catalog",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Icons" }));
+    expect(screen.getByRole("tab", { name: "Icons" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Icon Registry" })).toBeVisible();
+    expect(screen.getByLabelText("Search")).toBeVisible();
+  });
+
+  it("switches to the presentation workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Presentable",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Present" }));
+    expect(screen.getByRole("tab", { name: "Present" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Presentation Mode" })).toBeVisible();
+  });
+
+  it("switches to the sharing workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Shareable",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Share" }));
+    expect(screen.getByRole("tab", { name: "Share" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Sharing" })).toBeVisible();
+  });
+
+  it("switches to the comments workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Discussable",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Comments" }));
+    expect(screen.getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Comments" })).toBeVisible();
+  });
+
+  it("switches to the approvals workspace tab", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Approvable",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "Approvals" }));
+    expect(screen.getByRole("tab", { name: "Approvals" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Approvals" })).toBeVisible();
   });
 
   it("switches to the audit workspace tab", async () => {
