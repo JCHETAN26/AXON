@@ -23,8 +23,9 @@
 > client-bundle secret scan clean.
 >
 > **Not yet done / known gaps** (see per-checkpoint notes):
-> - Migrations `0003` and `0004` are validated on PGlite but **not yet applied
->   to live Supabase**.
+> - Migrations `0000`–`0004` are **applied to live Supabase** (via the pooler;
+>   `db:migrate` now uses `scripts/migrate.ts` — see `docs/ops/migrations.md`).
+>   Live schema matches the code (29 public tables).
 > - **Checkpoint 8** security core (webhook + HMAC signature + delivery dedup +
 >   PG-backed jobs) is now built and tested, but analysis is still shallow (empty
 >   proposal, extension-based risk) and the job dispatch is not wired → **IN_PROGRESS**.
@@ -171,6 +172,9 @@
   - MCP package exists with strict Zod schemas and a limited tool set:
     inspect/inventory/analyze/get architecture/list evidence/explain evidence/
     audit/export.
+  - MCP package now has a runnable `axon-mcp --stdio` entrypoint with JSON-RPC
+    handlers for `initialize`, `tools/list`, and `tools/call`; it does not open
+    a network listener.
   - Hosted app has local-agent create/list/revoke APIs, sync-run metadata, and a
     Local Intelligence workspace component.
   - Targeted automated gates now pass:
@@ -188,13 +192,16 @@
     config.
   - Fixed Local Intelligence status badge usage to match the shared UI status
     vocabulary.
+  - Added the missing `axon-mcp` CLI/bin entrypoint, dependency-free stdio
+    transport, protocol smoke tests, and matching Local Intelligence setup
+    instructions.
   - Enforced five-minute, single-use local-agent pairing tokens in the service
     and added expiry/replay tests.
   - Fixed strict TypeScript optional-property handling in local-agent routes and
     sync review manifests.
 - **Known gaps**:
-  - MCP server is a tool library/package surface, not a complete runnable local
-    MCP transport with install/start/manual validation.
+  - MCP server has a local stdio transport, but not a packaged/published install
+    flow or manual validation with a fixture repository.
   - Required tools are still missing or deferred: update proposal, create/
     simulate scenario, compare snapshots, compare clouds, plan migration,
     synchronize evidence, and future cost estimation.

@@ -15,7 +15,7 @@
     "verify:postgres": "tsx scripts/verify-postgres.ts",
     "verify:client-bundle": "tsx scripts/verify-client-bundle.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx scripts/migrate.ts",
     "db:status": "drizzle-kit up"
   },
   "dependencies": {
