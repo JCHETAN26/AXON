@@ -1,7 +1,7 @@
 import { createEmptyArchitectureDocument } from "@axon/diagram-schema";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { MultiCloudWorkspace } from "./multi-cloud-workspace";
 
@@ -20,6 +20,10 @@ function fixtureDocument() {
 }
 
 describe("MultiCloudWorkspace", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("renders provider cost comparison and mapping provenance", () => {
     render(<MultiCloudWorkspace document={fixtureDocument()} />);
     expect(screen.getByRole("heading", { name: "Multi-Cloud Workspace" })).toBeVisible();
@@ -36,5 +40,19 @@ describe("MultiCloudWorkspace", () => {
     render(<MultiCloudWorkspace document={fixtureDocument()} />);
     await user.selectOptions(screen.getByLabelText("Target Provider"), "azure");
     expect(screen.getByText(/Azure Virtual Machines/)).toBeVisible();
+  });
+
+  it("persists explicit target selections for component mappings", async () => {
+    const user = userEvent.setup();
+    render(<MultiCloudWorkspace document={fixtureDocument()} />);
+
+    await user.selectOptions(screen.getByLabelText("Target selection for Queue"), "gcp.pubsub");
+
+    expect(await screen.findByText("user-selected")).toBeVisible();
+    await waitFor(() => {
+      expect(window.localStorage.getItem("axon.multicloud.v1.project-mc")).toContain(
+        "\"queue\":\"gcp.pubsub\"",
+      );
+    });
   });
 });

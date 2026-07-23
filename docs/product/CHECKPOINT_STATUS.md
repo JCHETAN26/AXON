@@ -503,19 +503,23 @@
     controls, provider cost comparison, mapping table, catalog provenance,
     unresolved decisions, and warnings that no live cloud inventory is queried
     and no migration is automatically recommended.
+  - Added persisted multi-cloud workspace state through the owner-scoped
+    artifact store (`multicloud` kind): source/target provider choices and
+    per-component target capability selections now survive reloads and are
+    labeled as user-selected overrides in the mapping table.
   - Targeted automated gates pass:
     `pnpm --filter @axon/repo-intel test -- multicloud-planner`,
     `pnpm --filter @axon/repo-intel typecheck`,
     `pnpm --filter @axon/repo-intel lint`,
-    `pnpm --filter @axon/web test -- multi-cloud-workspace workspace-shell`,
+    `pnpm --filter @axon/web test -- multi-cloud-workspace artifacts workspace-shell`,
     `pnpm --filter @axon/web typecheck`, and
     `pnpm --filter @axon/web lint`.
 - **Known gaps**:
   - The catalog is still a small curated fixture, not a complete provider
     capability corpus.
   - Side-by-side canvases, synchronized selection, hybrid architecture mode,
-    scenario comparison, availability comparison, export, user override
-    persistence, and manual validation are not complete.
+    scenario comparison, availability comparison, export, richer override
+    semantics, and manual validation are not complete.
 
 ## Checkpoint 17 — Collaboration, Sharing, and Presentation
 
