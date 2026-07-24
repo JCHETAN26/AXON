@@ -354,8 +354,12 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Workspace tools" className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
+        <div
+          role="tablist"
+          aria-label="Workspace tools"
+          className="flex items-center gap-2 overflow-x-auto pb-1"
+        >
           {TOOLS.map((tool) => (
             <button
               key={tool}
@@ -379,7 +383,7 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
                 if (next !== undefined) focusTool(next);
               }}
               className={cx(
-                "type-label-caps border-2 px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent",
+                "type-label-caps shrink-0 whitespace-nowrap border-2 px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent",
                 activeTool === tool
                   ? "border-accent bg-accent-muted text-foreground"
                   : "border-border text-foreground-muted hover:border-border-strong",
