@@ -68,11 +68,28 @@ export class AnthropicArchitectureProvider implements ArchitectureProvider {
         });
       }
       if (error instanceof Anthropic.APIError) {
-        throw new GenerationProviderError(
-          `Model provider error${error.status !== undefined ? ` (${String(error.status)})` : ""}.`,
-          { cause: error },
-        );
+        // The provider's real reason (which field/model it rejected) lives in
+        // error.message — always log it server-side for diagnosis, and surface a
+        // short form to the caller outside production so failures are debuggable
+        // instead of a bare status code. The Anthropic error text describes the
+        // request shape, not the key, so it is safe to log.
+        const status = error.status !== undefined ? ` (${String(error.status)})` : "";
+        // eslint-disable-next-line no-console
+        console.error("[generation] Anthropic API error", {
+          status: error.status,
+          requestId: error.requestID,
+          detail: error.message,
+        });
+        const detail =
+          process.env.NODE_ENV !== "production" && typeof error.message === "string"
+            ? ` ${error.message}`
+            : "";
+        throw new GenerationProviderError(`Model provider error${status}.${detail}`, {
+          cause: error,
+        });
       }
+      // eslint-disable-next-line no-console
+      console.error("[generation] Unexpected model provider failure", error);
       throw new GenerationProviderError("Unexpected model provider failure.", { cause: error });
     }
   }
