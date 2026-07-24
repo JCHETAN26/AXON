@@ -1,17 +1,23 @@
 import { and, eq, desc } from "drizzle-orm";
-import { 
-  type CloudProvider, 
-  reconcileCloudAssets, 
-  type RawCloudAssetInput 
-} from "@axon/repo-intel";
+import { type CloudProvider, reconcileCloudAssets } from "@axon/repo-intel";
 
 import { type Database } from "../db/client";
 import { cloudConnections, cloudDiscoveryRuns } from "../db/schema";
+import {
+  type CloudInventoryAdapter,
+  FixtureCloudInventoryAdapter,
+} from "./cloud-inventory-adapter";
 
 export class CloudDiscoveryService {
   constructor(
     private readonly db: Database,
-    private readonly ownerId: string
+    private readonly ownerId: string,
+    /**
+     * Where discovered assets come from. Defaults to the deterministic fixture
+     * adapter; inject a live read-only adapter to read a real account without
+     * changing any downstream discovery/reconciliation/persistence code.
+     */
+    private readonly inventory: CloudInventoryAdapter = new FixtureCloudInventoryAdapter()
   ) {}
 
   async registerConnection(
@@ -58,27 +64,15 @@ export class CloudDiscoveryService {
     const conn = connRows[0];
     if (!conn) throw new Error("Cloud connection not found");
 
-    // Read-only cloud asset discovery payload
-    const mockRawAssets: RawCloudAssetInput[] = [
-      {
-        provider: conn.provider as CloudProvider,
-        resourceType: conn.provider === "aws" ? "aws_db_instance" : "google_sql_database_instance",
-        name: "production-postgres",
-        region: conn.provider === "aws" ? "us-east-1" : "us-central1",
-        accountOrProjectId: conn.accountOrProjectId,
-        tags: { Environment: "production" },
-      },
-      {
-        provider: conn.provider as CloudProvider,
-        resourceType: conn.provider === "aws" ? "aws_instance" : "google_compute_instance",
-        name: "unmanaged-shadow-vm",
-        region: conn.provider === "aws" ? "us-east-1" : "us-central1",
-        accountOrProjectId: conn.accountOrProjectId,
-        tags: { ManagedBy: "manual" },
-      },
-    ];
+    // Read-only cloud asset discovery via the injected inventory adapter. The
+    // service never fabricates assets inline — it only reconciles whatever the
+    // adapter returns, so swapping fixture for live is a one-line change.
+    const rawAssets = await this.inventory.listAssets({
+      provider: conn.provider as CloudProvider,
+      accountOrProjectId: conn.accountOrProjectId,
+    });
 
-    const reconciliation = reconcileCloudAssets(mockRawAssets, declaredIacNames);
+    const reconciliation = reconcileCloudAssets(rawAssets, declaredIacNames);
 
     const insertedRun = await this.db
       .insert(cloudDiscoveryRuns)

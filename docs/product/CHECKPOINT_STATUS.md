@@ -39,8 +39,12 @@
 >   end-to-end PR run against the GitHub App (manual gate) → **IN_PROGRESS**.
 > - **Checkpoint 11**: calibration now reads the **ingested** telemetry metrics
 >   (no more mock samples). Remaining: telemetry UI + live-source manual gate.
-> - **Checkpoint 10** still uses **hardcoded mock cloud assets** (no real cloud
->   reads) → **IN_PROGRESS**.
+> - **Checkpoint 10**: discovery now reads through a `CloudInventoryAdapter`
+>   seam. The fixture adapter still supplies deterministic (non-live) assets,
+>   but the service reconciles only adapter output and the adapter carries a
+>   `source: fixture|live` flag, so a credentialed read-only adapter drops in
+>   without touching discovery/reconciliation/persistence. Real cloud reads
+>   remain a manual/credential gate → **IN_PROGRESS**.
 > - **Checkpoint 5** is complete through automated validation: the full
 >   connect→analyze→proposal→review→apply loop plus data lifecycle
 >   (export/deletion/disconnect) is built, real-DB integration-tested,
@@ -61,7 +65,7 @@
 | 7 | AUTOMATED_VALIDATION_PASSING | Architecture snapshots & drift (service now real-DB integration-tested) |
 | 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + gated GitHub output + scheduler-triggered drain endpoint + base↔head architecture diff (added/removed/modified components) all done and tested; live end-to-end PR run is a manual gate |
 | 9 | AUTOMATED_VALIDATION_PASSING | AWS-to-GCP migration workspace (deterministic catalog/engine) |
-| 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
+| 10 | IN_PROGRESS | Read-only cloud discovery — discovery now reads through a `CloudInventoryAdapter` seam (fixture adapter today, carries a `source: fixture\|live` flag so fixture data can never be mistaken for a real read); the service fabricates nothing and reconciles only adapter output, so a credentialed live read-only adapter is a drop-in. Tested. Remaining manual gate: the live adapter + real cloud credentials |
 | 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation — calibration reads ingested metrics; Monitor workspace tab now loads telemetry sources/calibration and applies telemetry-measured overrides into Scenario Lab (tested). Remaining: live telemetry-source ingestion (manual gate) |
 | 12 | AUTOMATED_VALIDATION_PASSING | Controlled infrastructure PRs (codegen + DB verified; live PR creation is a manual gate) |
 | 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, MCP tool subset exist; pairing auth now hardened — atomic single-use claim with DB-side expiry, replay/revocation, real-DB tested; core scope remains partial) |

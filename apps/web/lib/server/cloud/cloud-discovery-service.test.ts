@@ -1,6 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { CloudDiscoveryService } from "./cloud-discovery-service";
+import {
+  type CloudConnectionContext,
+  type CloudInventoryAdapter,
+} from "./cloud-inventory-adapter";
 import { type Database } from "../db/client";
 import { createTestDatabase, resetTestDatabase } from "../db/testing";
 import { seedUser } from "../test-support/seed";
@@ -27,6 +31,33 @@ describe("CloudDiscoveryService (real DB)", () => {
     // One asset is declared in IaC (matched), one is unmanaged shadow.
     expect(reconciliation.summary.matchedCount).toBeGreaterThanOrEqual(1);
     expect(reconciliation.summary.unmanagedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reconciles whatever the injected inventory adapter returns", async () => {
+    const userId = await seedUser(db, "adapter@example.com");
+    // A stand-in "live" adapter that returns only IaC-managed assets — no shadow.
+    const allManaged: CloudInventoryAdapter = {
+      source: "live",
+      listAssets: (conn: CloudConnectionContext) =>
+        Promise.resolve([
+          {
+            provider: conn.provider,
+            resourceType: "aws_db_instance",
+            name: "production-postgres",
+            region: "us-east-1",
+            accountOrProjectId: conn.accountOrProjectId,
+            tags: {},
+          },
+        ]),
+    };
+    const service = new CloudDiscoveryService(db, userId, allManaged);
+    const connId = await service.registerConnection("aws", "111122223333", "arn:aws:iam::role/ro");
+
+    const { reconciliation } = await service.runDiscovery(connId, ["production-postgres"]);
+    // The service fabricated nothing: it reconciled exactly the adapter's output.
+    expect(reconciliation.summary.totalDiscovered).toBe(1);
+    expect(reconciliation.summary.matchedCount).toBe(1);
+    expect(reconciliation.summary.unmanagedCount).toBe(0);
   });
 
   it("scopes connections by owner and blocks discovery on unowned connections", async () => {
