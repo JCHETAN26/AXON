@@ -115,6 +115,48 @@ describe("answerGroundedArchitectureQuestion", () => {
     expect(answer.citations[0]?.kind).toBe("component");
   });
 
+  it("lists every component of a category for an inventory question", () => {
+    const doc = createEmptyArchitectureDocument({
+      id: "doc-inv",
+      projectId: "project-inv",
+      name: "Inventory fixture",
+      now: "2026-07-23T00:00:00.000Z",
+    });
+    doc.nodes = [
+      { id: "orders-db", name: "Orders DB", category: "database" },
+      { id: "users-db", name: "Users DB", category: "database" },
+      { id: "web", name: "Web", category: "compute" },
+    ];
+
+    const answer = answerGroundedArchitectureQuestion("what databases do we use?", {
+      document: doc,
+    });
+    expect(answer.confidence).toBe("high");
+    expect(answer.directAnswer).toContain("Orders DB");
+    expect(answer.directAnswer).toContain("Users DB");
+    expect(answer.citations).toHaveLength(2);
+    expect(answer.citations.every((c) => c.kind === "component")).toBe(true);
+  });
+
+  it("still resolves to one component when the question names it, despite peers", () => {
+    const doc = createEmptyArchitectureDocument({
+      id: "doc-inv2",
+      projectId: "project-inv2",
+      name: "Inventory fixture 2",
+      now: "2026-07-23T00:00:00.000Z",
+    });
+    doc.nodes = [
+      { id: "orders-db", name: "Orders DB", category: "database" },
+      { id: "users-db", name: "Users DB", category: "database" },
+    ];
+
+    const answer = answerGroundedArchitectureQuestion("tell me about the orders db", {
+      document: doc,
+    });
+    expect(answer.citations).toHaveLength(1);
+    expect(answer.citations[0]).toMatchObject({ kind: "component", id: "orders-db" });
+  });
+
   it("refuses a question that carries no grounding keywords", () => {
     const answer = answerGroundedArchitectureQuestion("what is it?", { document: DOCUMENT });
     expect(answer.confidence).toBe("insufficient");

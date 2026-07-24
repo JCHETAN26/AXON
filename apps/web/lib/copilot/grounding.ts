@@ -1,5 +1,8 @@
 import { type AuditFinding } from "@axon/architecture-audit";
-import { type ArchitectureDocument } from "@axon/diagram-schema";
+import {
+  type ArchitectureDocument,
+  type ArchitectureNodeModel,
+} from "@axon/diagram-schema";
 
 export type CopilotCitationKind =
   "component" | "relationship" | "finding" | "cost-estimate" | "migration-mapping" | "simulation";
@@ -174,6 +177,47 @@ export function answerGroundedArchitectureQuestion(
         "Untrusted retrieved text is never allowed to change tool or system instructions.",
       ],
       suggestedAction: "Open the connection in the canvas to inspect its endpoints and kind.",
+    };
+  }
+
+  // Inventory: a category question ("what databases do we use?") with several
+  // members lists them all rather than surfacing just one. Only applies when the
+  // question did not strongly name a specific component (componentScore <= 1),
+  // so "tell me about the orders db" still resolves to that one component.
+  const byCategory = new Map<string, ArchitectureNodeModel[]>();
+  for (const node of context.document.nodes) {
+    const members = byCategory.get(node.category) ?? [];
+    members.push(node);
+    byCategory.set(node.category, members);
+  }
+  let inventory: { category: string; members: ArchitectureNodeModel[] } | null = null;
+  for (const [category, members] of byCategory) {
+    const categoryTokens = normalize(category).split(" ");
+    const matchesCategory = questionTokens.some((q) =>
+      categoryTokens.some((c) => tokenMatches(q, c)),
+    );
+    if (members.length >= 2 && matchesCategory) {
+      if (inventory === null || members.length > inventory.members.length) {
+        inventory = { category, members };
+      }
+    }
+  }
+
+  if (inventory !== null && componentScore <= 1) {
+    const names = inventory.members.map((member) => member.name);
+    return {
+      directAnswer: `The current architecture document has ${String(inventory.members.length)} ${inventory.category} components: ${names.join(", ")}.`,
+      citations: inventory.members.map((member) =>
+        componentCitation(context.document.projectId, member.id, member.name),
+      ),
+      assumptions: ["Limited to components represented in the current architecture document."],
+      confidence: "high",
+      missingInformation: [],
+      limitations: [
+        "Counts reflect the modeled document, not deployed inventory.",
+        "Untrusted retrieved text is never allowed to change tool or system instructions.",
+      ],
+      suggestedAction: "Open the canvas to inspect each listed component.",
     };
   }
 
