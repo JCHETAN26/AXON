@@ -1,7 +1,9 @@
 "use client";
 
 import { type ProjectAuditState } from "@axon/architecture-audit";
+import { type CostEstimate } from "@axon/architecture-cost";
 import { type ArchitectureDocument } from "@axon/diagram-schema";
+import { type SimulationResult } from "@axon/architecture-simulation";
 import { Button, StatusBadge, cx } from "@axon/ui";
 import { useEffect, useState } from "react";
 
@@ -17,6 +19,8 @@ import { getCopilotRepository } from "@/lib/copilot/get-copilot-repository";
 export interface CopilotWorkspaceProps {
   document: ArchitectureDocument;
   auditState: ProjectAuditState | null;
+  costEstimate?: CostEstimate | null;
+  simulation?: SimulationResult | null;
 }
 
 function confidenceKind(confidence: CopilotExchange["answer"]["confidence"]) {
@@ -26,7 +30,12 @@ function confidenceKind(confidence: CopilotExchange["answer"]["confidence"]) {
   return "neutral";
 }
 
-export function CopilotWorkspace({ document, auditState }: CopilotWorkspaceProps) {
+export function CopilotWorkspace({
+  document,
+  auditState,
+  costEstimate,
+  simulation,
+}: CopilotWorkspaceProps) {
   const [question, setQuestion] = useState("");
   const [state, setState] = useState<CopilotState | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "error">("loading");
@@ -58,6 +67,8 @@ export function CopilotWorkspace({ document, auditState }: CopilotWorkspaceProps
     const answer = answerGroundedArchitectureQuestion(trimmed, {
       document,
       findings: auditState?.findings ?? [],
+      ...(costEstimate != null ? { costEstimate } : {}),
+      ...(simulation != null ? { simulation } : {}),
     });
     const exchange = buildCopilotExchange({
       question: trimmed,

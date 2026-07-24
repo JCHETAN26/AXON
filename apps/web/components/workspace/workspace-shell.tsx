@@ -10,6 +10,7 @@ import {
   type TelemetryProvider,
 } from "@axon/architecture-simulation";
 import { type ProjectRecommendationState } from "@axon/architecture-recommendations";
+import { estimateArchitectureCost, type CostEstimate } from "@axon/architecture-cost";
 import { buttonClasses, cx } from "@axon/ui";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +36,7 @@ import { AuditOverlayProvider } from "@/components/canvas/audit-overlay-context"
 import { CostOverlayProvider } from "@/components/canvas/cost-overlay-context";
 import { SimulationOverlayProvider } from "@/components/canvas/simulation-overlay-context";
 import { getAuditRepository } from "@/lib/audit/get-audit-repository";
+import { defaultUsageFor } from "@/lib/cost/default-usage";
 import { getProjectRepository } from "@/lib/projects/get-repository";
 import { type ProjectWithDocument } from "@/lib/projects/repository";
 import { getImportRepository } from "@/lib/import/get-import-repository";
@@ -240,6 +242,18 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
       capacityProfile: simulationState.capacityProfile,
     });
   }, [state, simulationState]);
+
+  // Cost estimate for the copilot, derived the same way the cost overlay is, so
+  // a "what does this cost?" answer matches what the Cost workspace shows.
+  const copilotCostEstimate = useMemo<CostEstimate | null>(() => {
+    if (state.status !== "ready") return null;
+    return estimateArchitectureCost({
+      document: state.data.document,
+      provider: "aws",
+      region: "us-east-1",
+      usageProfile: defaultUsageFor(state.data.document),
+    });
+  }, [state]);
 
   if (state.status === "loading") {
     return <p className="type-mono-data text-foreground-muted">LOADING_PROJECT…</p>;
@@ -552,7 +566,12 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
         aria-labelledby="workspace-tab-copilot"
         hidden={activeTool !== "copilot"}
       >
-        <CopilotWorkspace document={document} auditState={auditState} />
+        <CopilotWorkspace
+          document={document}
+          auditState={auditState}
+          costEstimate={copilotCostEstimate}
+          simulation={canvasSimulation}
+        />
       </div>
 
       <div

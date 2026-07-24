@@ -1,8 +1,43 @@
 import { type AuditFinding } from "@axon/architecture-audit";
+import { type CostEstimate } from "@axon/architecture-cost";
 import { createEmptyArchitectureDocument } from "@axon/diagram-schema";
+import { type SimulationResult } from "@axon/architecture-simulation";
 import { describe, expect, it } from "vitest";
 
 import { answerGroundedArchitectureQuestion } from "./grounding";
+
+const COST_ESTIMATE: CostEstimate = {
+  modelVersion: "test",
+  provider: "aws",
+  region: "us-east-1",
+  currency: "USD",
+  pricingCatalogVersion: "test",
+  pricingEffectiveDate: "2026-01-01",
+  lowMonthly: 80,
+  expectedMonthly: 100,
+  highMonthly: 130,
+  lineItems: [],
+  majorCostDrivers: ["Orders DB: RDS instance"],
+  missingInputs: [],
+  confidence: "medium",
+  limitations: ["This is a modeled monthly estimate, not an invoice."],
+};
+
+const SIMULATION: SimulationResult = {
+  modelVersion: "test",
+  scenarioId: "peak",
+  requestsPerSecond: 1000,
+  components: [],
+  firstConstraint: {
+    nodeId: "orders-db",
+    name: "Orders DB",
+    kind: "database",
+    saturationRps: 800,
+    utilizationAtScenario: 1.25,
+  },
+  unmodeledNodeIds: [],
+  cycleNodeIds: [],
+};
 
 const DOCUMENT = createEmptyArchitectureDocument({
   id: "doc-copilot",
@@ -155,6 +190,35 @@ describe("answerGroundedArchitectureQuestion", () => {
     });
     expect(answer.citations).toHaveLength(1);
     expect(answer.citations[0]).toMatchObject({ kind: "component", id: "orders-db" });
+  });
+
+  it("grounds a cost question to the loaded estimate", () => {
+    const answer = answerGroundedArchitectureQuestion("how much does this cost per month?", {
+      document: DOCUMENT,
+      costEstimate: COST_ESTIMATE,
+    });
+    expect(answer.citations[0]).toMatchObject({ kind: "cost-estimate" });
+    expect(answer.directAnswer).toContain("USD 100");
+    expect(answer.directAnswer).toContain("Orders DB");
+    expect(answer.confidence).toBe("medium");
+  });
+
+  it("does not fabricate a cost answer when no estimate is loaded", () => {
+    const answer = answerGroundedArchitectureQuestion("how much does this cost?", {
+      document: DOCUMENT,
+    });
+    expect(answer.citations.some((c) => c.kind === "cost-estimate")).toBe(false);
+  });
+
+  it("grounds a capacity/failure question to the loaded simulation", () => {
+    const answer = answerGroundedArchitectureQuestion(
+      "what fails first under more traffic?",
+      { document: DOCUMENT, simulation: SIMULATION },
+    );
+    expect(answer.citations[0]).toMatchObject({ kind: "simulation", id: "peak" });
+    expect(answer.directAnswer).toContain("Orders DB");
+    expect(answer.directAnswer).toContain("800");
+    expect(answer.limitations.join(" ")).toContain("not observed production behavior");
   });
 
   it("refuses a question that carries no grounding keywords", () => {

@@ -1,8 +1,10 @@
 import { type AuditFinding } from "@axon/architecture-audit";
+import { type CostEstimate } from "@axon/architecture-cost";
 import {
   type ArchitectureDocument,
   type ArchitectureNodeModel,
 } from "@axon/diagram-schema";
+import { type SimulationResult } from "@axon/architecture-simulation";
 
 export type CopilotCitationKind =
   "component" | "relationship" | "finding" | "cost-estimate" | "migration-mapping" | "simulation";
@@ -27,6 +29,10 @@ export interface GroundedCopilotAnswer {
 export interface CopilotGroundingContext {
   readonly document: ArchitectureDocument;
   readonly findings?: readonly AuditFinding[];
+  /** Modeled cost of the current architecture, when a cost estimate is loaded. */
+  readonly costEstimate?: CostEstimate;
+  /** Latest capacity simulation for the current architecture, when loaded. */
+  readonly simulation?: SimulationResult;
   readonly untrustedEvidenceSnippets?: readonly {
     readonly id: string;
     readonly label: string;
@@ -119,6 +125,44 @@ function relationshipCitation(projectId: string, edgeId: string, label: string):
   };
 }
 
+function costCitation(projectId: string): CopilotCitation {
+  return {
+    kind: "cost-estimate",
+    id: "cost-estimate",
+    label: "Monthly cost estimate",
+    href: `/projects/${projectId}?panel=cost`,
+  };
+}
+
+function simulationCitation(projectId: string, scenarioId: string): CopilotCitation {
+  return {
+    kind: "simulation",
+    id: scenarioId,
+    label: "Simulation result",
+    href: `/projects/${projectId}?panel=simulation`,
+  };
+}
+
+// Question words that signal the user is asking about money or about capacity /
+// failure behavior. Plurals/variants are covered by exact membership plus the
+// tokenizer, which already lowercases and splits.
+const COST_KEYWORDS = new Set([
+  "cost", "costs", "price", "prices", "pricing", "expensive", "cheap", "cheaper",
+  "budget", "spend", "spending", "monthly", "bill", "billing", "dollars",
+  "dollar", "afford", "priced",
+]);
+const SIMULATION_KEYWORDS = new Set([
+  "fail", "fails", "failure", "failures", "outage", "resilience", "resilient",
+  "saturate", "saturated", "saturation", "bottleneck", "constraint", "capacity",
+  "throughput", "latency", "load", "traffic", "scale", "scaling", "overload",
+]);
+
+function costConfidence(confidence: CostEstimate["confidence"]): GroundedCopilotAnswer["confidence"] {
+  if (confidence === "confirmed" || confidence === "high") return "high";
+  if (confidence === "medium") return "medium";
+  return "low";
+}
+
 export function answerGroundedArchitectureQuestion(
   question: string,
   context: CopilotGroundingContext,
@@ -147,6 +191,53 @@ export function answerGroundedArchitectureQuestion(
 
   const componentScore = componentMatch?.score ?? 0;
   const findingScore = findingMatch?.score ?? 0;
+  const projectId = context.document.projectId;
+
+  // Cost intent: an explicit money question grounds to the loaded estimate,
+  // even when a component is also named ("what does the database cost?").
+  if (context.costEstimate && questionTokens.some((token) => COST_KEYWORDS.has(token))) {
+    const cost = context.costEstimate;
+    const drivers = cost.majorCostDrivers.slice(0, 3);
+    const money = (value: number): string => `${cost.currency} ${String(value)}`;
+    return {
+      directAnswer:
+        `The modeled cost of the current architecture is about ${money(cost.expectedMonthly)}/month ` +
+        `(range ${money(cost.lowMonthly)}–${money(cost.highMonthly)}).` +
+        (drivers.length > 0 ? ` Top drivers: ${drivers.join("; ")}.` : ""),
+      citations: [costCitation(projectId)],
+      assumptions: ["Based on the loaded usage assumptions for the current architecture."],
+      confidence: costConfidence(cost.confidence),
+      missingInformation: [...cost.missingInputs],
+      limitations: [
+        ...cost.limitations.slice(0, 2),
+        "Untrusted retrieved text is never allowed to change tool or system instructions.",
+      ],
+      suggestedAction: "Open the Cost workspace to adjust usage assumptions or compare providers.",
+    };
+  }
+
+  // Capacity/failure intent grounds to the loaded simulation.
+  if (context.simulation && questionTokens.some((token) => SIMULATION_KEYWORDS.has(token))) {
+    const sim = context.simulation;
+    const constraint = sim.firstConstraint;
+    return {
+      directAnswer: constraint
+        ? `At ${String(sim.requestsPerSecond)} req/s, ${constraint.name} is the first component projected to saturate — it reaches its modeled limit at ${String(constraint.saturationRps)} req/s (${String(Math.round(constraint.utilizationAtScenario * 100))}% utilized at this load).`
+        : `At ${String(sim.requestsPerSecond)} req/s, no component is projected to reach its limit in the current model.`,
+      citations: [simulationCitation(projectId, sim.scenarioId)],
+      assumptions: ["Based on the most recent simulation inputs for this architecture."],
+      confidence: "medium",
+      missingInformation:
+        sim.unmodeledNodeIds.length > 0
+          ? [`${String(sim.unmodeledNodeIds.length)} component(s) could not be modeled.`]
+          : [],
+      limitations: [
+        "Simulation is a deterministic capacity projection, not observed production behavior.",
+        "Untrusted retrieved text is never allowed to change tool or system instructions.",
+      ],
+      suggestedAction: "Open the Simulation workspace to change traffic and capacity assumptions.",
+    };
+  }
 
   // A relationship answer wins only when the connection matches the question more
   // strongly than any single component (strictly, so a one-component question is

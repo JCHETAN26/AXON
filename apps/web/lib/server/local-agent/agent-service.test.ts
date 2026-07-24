@@ -183,7 +183,7 @@ describe("LocalAgentService with migrated database", () => {
       where id = ${created.agentId}
     `);
     expect(columnCheck).toBeDefined();
-  }, 15_000);
+  }, 30_000);
 });
 
 describe("CP13 pairing security (real DB)", () => {

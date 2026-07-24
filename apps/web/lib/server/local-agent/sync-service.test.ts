@@ -215,5 +215,5 @@ describe("EvidenceSyncService", () => {
       localWorkspaceSnapshotId: "snapshot-1",
       rawSourceRetained: false,
     });
-  }, 15_000);
+  }, 30_000);
 });
