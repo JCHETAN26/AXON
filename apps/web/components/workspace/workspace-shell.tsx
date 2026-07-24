@@ -243,6 +243,13 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
     });
   }, [state, simulationState]);
 
+  // Canvas overlays are off by default so a freshly opened diagram reads as an
+  // architecture first; each can be toggled on to pin risk / load / cost onto it.
+  const [overlays, setOverlays] = useState({ risk: false, load: false, cost: false });
+  const toggleOverlay = (key: "risk" | "load" | "cost") => {
+    setOverlays((current) => ({ ...current, [key]: !current[key] }));
+  };
+
   // Cost estimate for the copilot, derived the same way the cost overlay is, so
   // a "what does this cost?" answer matches what the Cost workspace shows.
   const copilotCostEstimate = useMemo<CostEstimate | null>(() => {
@@ -416,10 +423,38 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
             }}
           />
         ) : (
-          <AuditOverlayProvider findings={auditState?.findings ?? []}>
-            <CostOverlayProvider document={document}>
-              <SimulationOverlayProvider result={canvasSimulation}>
-                <div className="hidden md:block">
+          <div className="flex flex-col gap-3">
+            <div className="hidden items-center gap-2 md:flex">
+              <span className="type-label-caps text-foreground-muted">Overlays</span>
+              {(
+                [
+                  { key: "risk", label: "Risk" },
+                  { key: "load", label: "Load" },
+                  { key: "cost", label: "Cost" },
+                ] as const
+              ).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={overlays[key]}
+                  onClick={() => {
+                    toggleOverlay(key);
+                  }}
+                  className={cx(
+                    "type-label-caps border-2 px-3 py-1 focus-visible:outline-2 focus-visible:outline-accent",
+                    overlays[key]
+                      ? "border-accent bg-accent-muted text-foreground"
+                      : "border-border text-foreground-muted hover:border-border-strong",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <AuditOverlayProvider findings={overlays.risk ? (auditState?.findings ?? []) : []}>
+              <CostOverlayProvider document={document} enabled={overlays.cost}>
+                <SimulationOverlayProvider result={overlays.load ? canvasSimulation : null}>
+                  <div className="hidden md:block">
                   <ArchitectureCanvasEditor
                     key={externalRevision}
                     projectId={project.id}
@@ -435,9 +470,10 @@ export function WorkspaceShell({ projectId }: { projectId: string }) {
                   </p>
                   <DocumentSummary document={document} />
                 </div>
-              </SimulationOverlayProvider>
-            </CostOverlayProvider>
-          </AuditOverlayProvider>
+                </SimulationOverlayProvider>
+              </CostOverlayProvider>
+            </AuditOverlayProvider>
+          </div>
         )}
       </div>
 

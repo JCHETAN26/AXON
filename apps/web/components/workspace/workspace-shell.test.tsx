@@ -74,6 +74,30 @@ describe("WorkspaceShell", () => {
     expect(screen.getByRole("button", { name: "Export HTML" })).toBeVisible();
   });
 
+  it("starts with all canvas overlays off and toggles them on", async () => {
+    const created = await getProjectRepository().createProject({
+      name: "Overlay project",
+      template: "sample",
+    });
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <WorkspaceShell projectId={created.project.id} />
+      </ThemeProvider>,
+    );
+
+    // A freshly opened canvas is clean — Risk / Load / Cost overlays are off.
+    for (const name of ["Risk", "Load", "Cost"]) {
+      expect(await screen.findByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
+    }
+    const cost = screen.getByRole("button", { name: "Cost" });
+    await user.click(cost);
+    expect(cost).toHaveAttribute("aria-pressed", "true");
+    // Others stay off — each overlay is independent.
+    expect(screen.getByRole("button", { name: "Risk" })).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("switches to the icon registry workspace tab", async () => {
     const created = await getProjectRepository().createProject({
       name: "Icon catalog",

@@ -39,14 +39,20 @@ export function deriveCostOverlay(
 
 const CostOverlayContext = createContext<ReadonlyMap<string, CostOverlayEntry>>(new Map());
 
+const EMPTY_COST_OVERLAY: ReadonlyMap<string, CostOverlayEntry> = new Map();
+
 export function CostOverlayProvider({
   document,
   children,
+  enabled = true,
 }: {
   document: ArchitectureDocument;
   children: ReactNode;
+  /** When false, no cost badges are exposed (the canvas overlay is toggled off). */
+  enabled?: boolean;
 }) {
-  const value = useMemo(() => deriveCostOverlay(document), [document]);
+  const derived = useMemo(() => deriveCostOverlay(document), [document]);
+  const value = enabled ? derived : EMPTY_COST_OVERLAY;
   return <CostOverlayContext.Provider value={value}>{children}</CostOverlayContext.Provider>;
 }
 
