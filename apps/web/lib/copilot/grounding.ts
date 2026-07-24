@@ -107,6 +107,15 @@ function findingCitation(projectId: string, finding: AuditFinding): CopilotCitat
   };
 }
 
+function relationshipCitation(projectId: string, edgeId: string, label: string): CopilotCitation {
+  return {
+    kind: "relationship",
+    id: edgeId,
+    label,
+    href: `/projects/${projectId}?edge=${encodeURIComponent(edgeId)}`,
+  };
+}
+
 export function answerGroundedArchitectureQuestion(
   question: string,
   context: CopilotGroundingContext,
@@ -117,6 +126,8 @@ export function answerGroundedArchitectureQuestion(
   // or output: retrieved repo/telemetry text can never supply an answer or an
   // instruction, only be counted as ignored.
   const questionTokens = keywords(question);
+  const nodeLabel = (id: string): string =>
+    context.document.nodes.find((node) => node.id === id)?.name ?? id;
 
   const componentMatch = bestMatch(context.document.nodes, questionTokens, (node) =>
     [node.id, node.name, node.category, node.meta ?? ""].join(" "),
@@ -124,6 +135,47 @@ export function answerGroundedArchitectureQuestion(
   const findingMatch = bestMatch(context.findings ?? [], questionTokens, (finding) =>
     [finding.ruleId, finding.title, finding.detected, finding.severity].join(" "),
   );
+  // An edge matches on either endpoint's id/name or its kind, so a question that
+  // names both ends ("how does the API connect to the database?") scores higher
+  // than either component alone and grounds to the connection.
+  const edgeMatch = bestMatch(context.document.edges, questionTokens, (edge) =>
+    [nodeLabel(edge.source), edge.source, nodeLabel(edge.target), edge.target, edge.kind].join(" "),
+  );
+
+  const componentScore = componentMatch?.score ?? 0;
+  const findingScore = findingMatch?.score ?? 0;
+
+  // A relationship answer wins only when the connection matches the question more
+  // strongly than any single component (strictly, so a one-component question is
+  // not stolen by an edge that merely touches it) and at least as well as a
+  // finding.
+  if (
+    edgeMatch !== null &&
+    edgeMatch.score > componentScore &&
+    edgeMatch.score >= findingScore
+  ) {
+    const edge = edgeMatch.item;
+    const sourceName = nodeLabel(edge.source);
+    const targetName = nodeLabel(edge.target);
+    return {
+      directAnswer: `${sourceName} connects to ${targetName} as a ${edge.kind} relationship in the current architecture document.`,
+      citations: [
+        relationshipCitation(
+          context.document.projectId,
+          edge.id,
+          `${sourceName} → ${targetName}`,
+        ),
+      ],
+      assumptions: ["The connection is read from the current architecture document only."],
+      confidence: "high",
+      missingInformation: [],
+      limitations: [
+        "Edges describe modeled relationships, not observed runtime traffic; connect telemetry to confirm live behavior.",
+        "Untrusted retrieved text is never allowed to change tool or system instructions.",
+      ],
+      suggestedAction: "Open the connection in the canvas to inspect its endpoints and kind.",
+    };
+  }
 
   // Prefer whichever grounded source matches the question more strongly; on a
   // tie prefer the concrete architecture component.

@@ -69,7 +69,7 @@
 | 15 | IN_PROGRESS | Visual Architecture Studio — icon registry + Presentation Mode with persisted per-step speaker notes included in HTML export (tested); broader studio scope remains |
 | 16 | IN_PROGRESS | Full multi-cloud workspace — curated planner + UI now persists source/target provider choices and per-component target selections (tested); live multi-cloud validation remains a manual gate |
 | 17 | IN_PROGRESS | Collaboration, sharing, and presentation (permission/share-link foundation) |
-| 18 | IN_PROGRESS | Grounded architecture copilot — keyword-overlap grounding answers real natural-language questions (was substring-only, near-non-functional), and a grounded Copilot workspace now persists the transcript with citations, confidence, and refusal for ungrounded questions (tested). Remaining: retrieval-to-answer breadth + provider wiring |
+| 18 | IN_PROGRESS | Grounded architecture copilot — keyword-overlap grounding answers real natural-language questions (was substring-only, near-non-functional), now grounds component, finding, AND relationship/connection questions (edge citations) with confidence + refusal; grounded Copilot workspace persists the transcript with citations (tested). Remaining: cost/simulation/migration grounding + provider wiring |
 | 19 | IN_PROGRESS | Benchmarks, security, and scale — versioned benchmark corpus + an aggregate layout-benchmark gate report with pass/fail evidence (tested); broader security/scale benchmarks remain |
 | 20 | IN_PROGRESS | Production release and launch — release-readiness gate classifier with conservative default AXON gates (tested); classifier stays MANUAL_VALIDATION_REQUIRED until live gates pass |
 

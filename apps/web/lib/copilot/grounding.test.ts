@@ -70,6 +70,51 @@ describe("answerGroundedArchitectureQuestion", () => {
     expect(answer.citations[0]).toMatchObject({ kind: "component", id: "orders-db" });
   });
 
+  it("grounds a connection question to the relationship between two components", () => {
+    const doc = createEmptyArchitectureDocument({
+      id: "doc-edge",
+      projectId: "project-edge",
+      name: "Edge fixture",
+      now: "2026-07-23T00:00:00.000Z",
+    });
+    doc.nodes = [
+      { id: "api", name: "API", category: "compute" },
+      { id: "orders-db", name: "Orders DB", category: "database" },
+    ];
+    doc.edges = [{ id: "api-db", source: "api", target: "orders-db", kind: "sync" }];
+
+    const answer = answerGroundedArchitectureQuestion(
+      "how does the api connect to the orders db?",
+      { document: doc },
+    );
+    expect(answer.citations[0]).toMatchObject({
+      kind: "relationship",
+      id: "api-db",
+      href: "/projects/project-edge?edge=api-db",
+    });
+    expect(answer.directAnswer).toContain("API connects to Orders DB");
+    expect(answer.confidence).toBe("high");
+  });
+
+  it("does not let an edge steal a single-component question", () => {
+    const doc = createEmptyArchitectureDocument({
+      id: "doc-edge2",
+      projectId: "project-edge2",
+      name: "Edge fixture 2",
+      now: "2026-07-23T00:00:00.000Z",
+    });
+    doc.nodes = [
+      { id: "api", name: "API", category: "compute", meta: "aws_instance" },
+      { id: "orders-db", name: "Orders DB", category: "database" },
+    ];
+    doc.edges = [{ id: "api-db", source: "api", target: "orders-db", kind: "sync" }];
+
+    // "api" alone touches the edge but should resolve to the component, not the
+    // relationship, since the edge does not score higher than the component.
+    const answer = answerGroundedArchitectureQuestion("api", { document: doc });
+    expect(answer.citations[0]?.kind).toBe("component");
+  });
+
   it("refuses a question that carries no grounding keywords", () => {
     const answer = answerGroundedArchitectureQuestion("what is it?", { document: DOCUMENT });
     expect(answer.confidence).toBe("insufficient");
