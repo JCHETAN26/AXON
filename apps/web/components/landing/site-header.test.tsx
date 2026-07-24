@@ -22,7 +22,8 @@ describe("SiteHeader", () => {
     expect(screen.getByRole("link", { name: "Product" })).toHaveAttribute("href", "#product");
     expect(screen.getByRole("link", { name: "MCP" })).toHaveAttribute("href", "#mcp");
     expect(screen.getByRole("link", { name: "Pricing" })).toHaveAttribute("href", "#pricing");
-    expect(screen.getByRole("link", { name: "Sign In" })).toBeInTheDocument();
+    // Sign In must route to the sign-in page, not a dead in-page anchor.
+    expect(screen.getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "/sign-in");
     expect(screen.getByRole("link", { name: "Start Building Free" })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Color theme" })).toBeInTheDocument();
   });
@@ -35,6 +36,10 @@ describe("SiteHeader", () => {
     await user.click(screen.getByRole("button", { name: "Open menu" }));
     const mobileNav = screen.getByRole("navigation", { name: "Mobile" });
     expect(mobileNav).toBeInTheDocument();
+    expect(within(mobileNav).getByRole("link", { name: "Sign In" })).toHaveAttribute(
+      "href",
+      "/sign-in",
+    );
     expect(screen.getByRole("button", { name: "Close menu" })).toHaveAttribute(
       "aria-expanded",
       "true",

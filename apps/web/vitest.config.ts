@@ -21,7 +21,6 @@ export default defineConfig({
     // and makes the full run deterministic (the root cause behind the flakes,
     // not just a higher ceiling).
     maxWorkers: "50%",
-    minWorkers: 1,
     // Migrations under (even capped) parallel load; give setup hooks headroom.
     hookTimeout: 30_000,
     // Integration tests (PGlite queries, full React workspace renders) can take

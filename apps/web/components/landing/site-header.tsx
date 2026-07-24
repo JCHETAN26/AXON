@@ -78,9 +78,9 @@ export function SiteHeader() {
         </div>
         <div className="flex items-center gap-3 md:gap-4">
           <ThemeToggle />
-          <a href="#sign-in" className={cx(NAV_LINK_CLASSES, "hidden md:inline")}>
+          <Link href="/sign-in" className={cx(NAV_LINK_CLASSES, "hidden md:inline")}>
             Sign In
-          </a>
+          </Link>
           <Link
             href="/projects/new"
             className={cx(buttonClasses("primary", "sm"), "hidden md:inline-flex")}
@@ -123,15 +123,15 @@ export function SiteHeader() {
                 </li>
               ))}
               <li>
-                <a
-                  href="#sign-in"
+                <Link
+                  href="/sign-in"
                   onClick={() => {
                     setMenuOpen(false);
                   }}
                   className={cx(NAV_LINK_CLASSES, "block py-3")}
                 >
                   Sign In
-                </a>
+                </Link>
               </li>
             </ul>
           </nav>
