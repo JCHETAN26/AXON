@@ -21,7 +21,14 @@ export class AnthropicArchitectureProvider implements ArchitectureProvider {
 
   constructor(options: { apiKey: string; model?: string }) {
     this.client = new Anthropic({ apiKey: options.apiKey });
-    this.model = options.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+    // Coalesce on emptiness, not just null/undefined: `??` would let an empty
+    // ANTHROPIC_MODEL="" env var through as the model and the API rejects it
+    // ("model: String should have at least 1 character").
+    const configured = options.model ?? process.env.ANTHROPIC_MODEL;
+    this.model =
+      configured !== undefined && configured.trim().length > 0
+        ? configured.trim()
+        : DEFAULT_MODEL;
     this.id = `anthropic:${this.model}`;
   }
 
