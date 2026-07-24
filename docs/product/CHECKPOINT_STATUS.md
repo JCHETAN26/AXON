@@ -62,16 +62,16 @@
 | 8 | IN_PROGRESS | GitHub PR reviews — webhook/jobs security core + evidence-based PR analysis + gated GitHub output + scheduler-triggered drain endpoint + base↔head architecture diff (added/removed/modified components) all done and tested; live end-to-end PR run is a manual gate |
 | 9 | AUTOMATED_VALIDATION_PASSING | AWS-to-GCP migration workspace (deterministic catalog/engine) |
 | 10 | IN_PROGRESS | Read-only cloud discovery (persistence verified; discovery uses mock assets, no real cloud reads) |
-| 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation (calibration now uses ingested metrics; UI + live-source manual gate remain) |
+| 11 | IN_PROGRESS | Runtime telemetry & calibrated simulation — calibration reads ingested metrics; Monitor workspace tab now loads telemetry sources/calibration and applies telemetry-measured overrides into Scenario Lab (tested). Remaining: live telemetry-source ingestion (manual gate) |
 | 12 | AUTOMATED_VALIDATION_PASSING | Controlled infrastructure PRs (codegen + DB verified; live PR creation is a manual gate) |
 | 13 | IN_PROGRESS | Local MCP and fully local mode (local boundary/analyzer/watcher, agent UI/API, sync metadata, MCP tool subset exist; pairing auth now hardened — atomic single-use claim with DB-side expiry, replay/revocation, real-DB tested; core scope remains partial) |
-| 14 | IN_PROGRESS | Cloud cost intelligence (deterministic cost model + MCP estimate tool; UI/persistence/manual gates incomplete) |
-| 15 | IN_PROGRESS | Visual Architecture Studio (icon registry foundation started) |
-| 16 | IN_PROGRESS | Full multi-cloud workspace (curated planner + first UI slice) |
+| 14 | AUTOMATED_VALIDATION_PASSING | Cloud cost intelligence — deterministic cost model + MCP estimate tool + persistence routes (estimate/estimates/assumptions) + cost workspace UI + canvas overlay + across-providers and at-scale projections, all tested (pkg 9 + web 17). Manual gate: numbers use honestly-labeled `test-fixture` pricing; a live validated provider catalog is required before dollar figures are trustworthy |
+| 15 | IN_PROGRESS | Visual Architecture Studio — icon registry + Presentation Mode with persisted per-step speaker notes included in HTML export (tested); broader studio scope remains |
+| 16 | IN_PROGRESS | Full multi-cloud workspace — curated planner + UI now persists source/target provider choices and per-component target selections (tested); live multi-cloud validation remains a manual gate |
 | 17 | IN_PROGRESS | Collaboration, sharing, and presentation (permission/share-link foundation) |
-| 18 | IN_PROGRESS | Grounded architecture copilot — keyword-overlap grounding now answers real natural-language questions (was substring-only, near-non-functional), cites components/findings, refuses without grounding, and provably never answers from untrusted evidence snippets; retrieval-to-answer + provider wiring remain |
-| 19 | IN_PROGRESS | Benchmarks, security, and scale (versioned benchmark corpus foundation) |
-| 20 | IN_PROGRESS | Production release and launch (release-readiness gate classifier) |
+| 18 | IN_PROGRESS | Grounded architecture copilot — keyword-overlap grounding answers real natural-language questions (was substring-only, near-non-functional), and a grounded Copilot workspace now persists the transcript with citations, confidence, and refusal for ungrounded questions (tested). Remaining: retrieval-to-answer breadth + provider wiring |
+| 19 | IN_PROGRESS | Benchmarks, security, and scale — versioned benchmark corpus + an aggregate layout-benchmark gate report with pass/fail evidence (tested); broader security/scale benchmarks remain |
+| 20 | IN_PROGRESS | Production release and launch — release-readiness gate classifier with conservative default AXON gates (tested); classifier stays MANUAL_VALIDATION_REQUIRED until live gates pass |
 
 > Note on numbering: this repo also documents a separate "Public Beta Launch"
 > checkpoint series (security, account lifecycle, production readiness) in
