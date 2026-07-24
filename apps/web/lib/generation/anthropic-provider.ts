@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  DRAFT_JSON_SCHEMA,
   GenerationProviderError,
   type ArchitectureProvider,
   type ProviderPrompt,
@@ -9,9 +8,11 @@ import {
 const DEFAULT_MODEL = "claude-opus-4-8";
 
 /**
- * Server-only provider backed by the official Anthropic SDK. Structured
- * outputs constrain the response to the draft shape at the API level; the
- * generation package's zod pipeline remains the validation authority.
+ * Server-only provider backed by the official Anthropic SDK. The system prompt
+ * requires a single raw-JSON draft, and the generation package's zod pipeline
+ * (parse → one repair round → normalize) is the validation authority. We do not
+ * send `output_config` structured outputs here: that field is beta-only and the
+ * stable Messages endpoint rejects it with a 400.
  */
 export class AnthropicArchitectureProvider implements ArchitectureProvider {
   readonly id: string;
@@ -31,12 +32,6 @@ export class AnthropicArchitectureProvider implements ArchitectureProvider {
         max_tokens: 16000,
         thinking: { type: "adaptive" },
         system: prompt.system,
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema: DRAFT_JSON_SCHEMA as unknown as Record<string, unknown>,
-          },
-        },
         messages: [{ role: "user", content: prompt.user }],
       });
 
