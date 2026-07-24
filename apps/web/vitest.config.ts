@@ -16,6 +16,12 @@ export default defineConfig({
     // Server integration tests spin up an in-process PGlite database and run
     // migrations once per file; give those setup hooks room under parallel load.
     hookTimeout: 30_000,
+    // Integration tests (PGlite queries, fake timers, full React workspace
+    // renders) can take well over the 5s default when the whole suite runs in
+    // parallel and contends for CPU — observed up to ~16s. Without this, they
+    // fail spuriously in the full run yet pass in isolation. Kept below
+    // hookTimeout so a genuinely hung test still surfaces.
+    testTimeout: 20_000,
     include: [
       "components/**/*.test.{ts,tsx}",
       "data/**/*.test.ts",

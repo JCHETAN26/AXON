@@ -144,8 +144,9 @@ describe("LocalAgentService with migrated database", () => {
 
     const createdAt = rows[0]?.createdAt;
     if (!createdAt) throw new Error("missing agent createdAt");
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(createdAt.getTime() + 60_000));
+    // No fake timers here: expiry is enforced DB-side (created_at > now() - TTL),
+    // and faking the clock does not move the DB clock. Faking it only froze
+    // setTimeout, which PGlite's async I/O can depend on — a stall under load.
 
     const exchanged = await service.exchangePairingToken(created.agentId, created.token);
 
