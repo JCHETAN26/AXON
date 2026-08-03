@@ -29,6 +29,10 @@ function sharesFor(ownerId: string) {
   return new ShareLinkService(db, ownerId);
 }
 
+function days(count: number): number {
+  return count * 24 * 60 * 60 * 1000;
+}
+
 describe("ShareLinkService", () => {
   it("creates a share link and stores only the hashed token", async () => {
     const project = await projectsFor(alice).createProject({ name: "Shared", template: "sample" });
@@ -55,17 +59,20 @@ describe("ShareLinkService", () => {
   it("resolves active tokens without revealing revoked or expired links", async () => {
     const project = await projectsFor(alice).createProject({ name: "Shared", template: "blank" });
     const service = sharesFor(alice);
+    // Creation validates the expiry against the real clock, so these instants
+    // are relative to now — a hard-coded date silently expires the fixture.
+    const now = Date.now();
     const created = await service.createShareLink({
       projectId: project.project.id,
       role: "commenter",
-      expiresAt: new Date("2026-08-01T00:00:00.000Z"),
+      expiresAt: new Date(now + days(30)),
     });
 
     await expect(
-      service.resolveShareToken(created.rawToken, new Date("2026-07-23T00:00:00.000Z")),
+      service.resolveShareToken(created.rawToken, new Date(now + days(1))),
     ).resolves.toMatchObject({ projectId: project.project.id, role: "commenter" });
     await expect(
-      service.resolveSharedProject(created.rawToken, new Date("2026-07-23T00:00:00.000Z")),
+      service.resolveSharedProject(created.rawToken, new Date(now + days(1))),
     ).resolves.toMatchObject({
       projectId: project.project.id,
       projectName: "Shared",
@@ -73,22 +80,18 @@ describe("ShareLinkService", () => {
       document: expect.objectContaining({ projectId: project.project.id }),
     });
     await expect(
-      service.resolveShareToken(created.rawToken, new Date("2026-08-02T00:00:00.000Z")),
+      service.resolveShareToken(created.rawToken, new Date(now + days(31))),
     ).resolves.toBeNull();
     await expect(
-      service.resolveSharedProject(created.rawToken, new Date("2026-08-02T00:00:00.000Z")),
+      service.resolveSharedProject(created.rawToken, new Date(now + days(31))),
     ).resolves.toBeNull();
 
-    await service.revokeShareLink(
-      project.project.id,
-      created.id,
-      new Date("2026-07-24T00:00:00.000Z"),
-    );
+    await service.revokeShareLink(project.project.id, created.id, new Date(now + days(2)));
     await expect(
-      service.resolveShareToken(created.rawToken, new Date("2026-07-25T00:00:00.000Z")),
+      service.resolveShareToken(created.rawToken, new Date(now + days(3))),
     ).resolves.toBeNull();
     await expect(
-      service.resolveSharedProject(created.rawToken, new Date("2026-07-25T00:00:00.000Z")),
+      service.resolveSharedProject(created.rawToken, new Date(now + days(3))),
     ).resolves.toBeNull();
   });
 

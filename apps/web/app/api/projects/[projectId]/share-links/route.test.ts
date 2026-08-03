@@ -57,7 +57,9 @@ describe("/api/projects/[projectId]/share-links", () => {
       jsonRequest({
         role: "viewer",
         label: "Design review",
-        expiresAt: "2026-08-01T00:00:00.000Z",
+        // Relative to now: the route rejects an already-elapsed expiry, so a
+        // hard-coded date turns this into a time bomb.
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       }),
       { params: Promise.resolve({ projectId: project.project.id }) },
     );

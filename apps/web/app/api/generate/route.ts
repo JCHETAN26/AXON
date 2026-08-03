@@ -15,6 +15,13 @@ const GenerateRequestSchema = z.object({
 });
 
 /**
+ * Generation is a non-streaming provider call that may retry on an invalid
+ * draft, so it needs more than a platform's default function budget. 60s is
+ * the ceiling on Vercel's Hobby plan; raise it if the deployment target allows.
+ */
+export const maxDuration = 60;
+
+/**
  * In cloud mode, generation requires an authenticated beta user and is
  * metered per user. The endpoint is never unrestricted in the deployed
  * product. In local mode (no database) these gates are inert so local-first
