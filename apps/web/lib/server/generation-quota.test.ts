@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { consumeGeneration, GENERATION_QUOTA, getQuotaStatus } from "./generation-quota";
+import { consumeGeneration, generationQuota, getQuotaStatus } from "./generation-quota";
 import { type Database } from "./db/client";
 import { createTestDatabase, resetTestDatabase } from "./db/testing";
 import { seedUser } from "./test-support/seed";
@@ -17,13 +17,37 @@ beforeEach(async () => {
   user = await seedUser(db, "a@example.com");
 });
 
+// Limits now come from the environment; resolve once against the test env.
+const QUOTA = generationQuota();
+
 const T0 = new Date("2026-07-20T12:00:00.000Z");
 const later = (ms: number) => new Date(T0.getTime() + ms);
+
+describe("generationQuota limits", () => {
+  it("applies the deployment overrides", () => {
+    expect(
+      generationQuota({
+        AXON_GENERATION_DAILY_LIMIT: "5",
+        AXON_GENERATION_PER_MINUTE_LIMIT: "4",
+      } as unknown as NodeJS.ProcessEnv),
+    ).toEqual({ perDay: 5, minIntervalMs: 15_000 });
+  });
+
+  it("falls back to defaults for absent or invalid values", () => {
+    const defaults = { perDay: 50, minIntervalMs: 3_000 };
+    expect(generationQuota({} as unknown as NodeJS.ProcessEnv)).toEqual(defaults);
+    for (const bad of ["0", "-1", "abc", "2.5", ""]) {
+      expect(
+        generationQuota({ AXON_GENERATION_DAILY_LIMIT: bad } as unknown as NodeJS.ProcessEnv),
+      ).toEqual(defaults);
+    }
+  });
+});
 
 describe("generation quota", () => {
   it("starts with the full daily allowance", async () => {
     const status = await getQuotaStatus(db, user, T0);
-    expect(status).toMatchObject({ used: 0, limit: GENERATION_QUOTA.perDay });
+    expect(status).toMatchObject({ used: 0, limit: QUOTA.perDay });
   });
 
   it("consumes one generation and decrements remaining", async () => {
@@ -31,7 +55,7 @@ describe("generation quota", () => {
     expect(outcome.allowed).toBe(true);
     if (outcome.allowed) {
       expect(outcome.status.used).toBe(1);
-      expect(outcome.status.remaining).toBe(GENERATION_QUOTA.perDay - 1);
+      expect(outcome.status.remaining).toBe(QUOTA.perDay - 1);
     }
   });
 
@@ -47,21 +71,17 @@ describe("generation quota", () => {
 
   it("allows a second request once the interval has passed", async () => {
     await consumeGeneration(db, user, T0);
-    const second = await consumeGeneration(db, user, later(GENERATION_QUOTA.minIntervalMs + 1));
+    const second = await consumeGeneration(db, user, later(QUOTA.minIntervalMs + 1));
     expect(second.allowed).toBe(true);
   });
 
   it("blocks once the daily quota is exhausted", async () => {
     // Space requests past the rate limit to isolate the daily cap.
-    for (let i = 0; i < GENERATION_QUOTA.perDay; i += 1) {
-      const outcome = await consumeGeneration(db, user, later(i * GENERATION_QUOTA.minIntervalMs));
+    for (let i = 0; i < QUOTA.perDay; i += 1) {
+      const outcome = await consumeGeneration(db, user, later(i * QUOTA.minIntervalMs));
       expect(outcome.allowed).toBe(true);
     }
-    const overflow = await consumeGeneration(
-      db,
-      user,
-      later(GENERATION_QUOTA.perDay * GENERATION_QUOTA.minIntervalMs),
-    );
+    const overflow = await consumeGeneration(db, user, later(QUOTA.perDay * QUOTA.minIntervalMs));
     expect(overflow.allowed).toBe(false);
     if (!overflow.allowed) expect(overflow.reason).toBe("quota-exceeded");
   });

@@ -24,7 +24,19 @@ export function hashInviteToken(rawCode: string): string {
   return createHash("sha256").update(normalizeInviteCode(rawCode)).digest("hex");
 }
 
+/**
+ * Open access drops the invitation requirement: any authenticated user is
+ * treated as having beta access. Sign-in is still required and every product
+ * operation stays owner-scoped — this widens who may enter, not what they may
+ * reach. Off unless explicitly enabled, so a missing or misspelled value fails
+ * closed back to invite-only.
+ */
+export function isOpenAccessEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.AXON_OPEN_ACCESS === "true";
+}
+
 export async function hasBetaAccess(db: Database, userId: string): Promise<boolean> {
+  if (isOpenAccessEnabled()) return true;
   const rows = await db.select().from(betaAccess).where(eq(betaAccess.userId, userId)).limit(1);
   return rows.length > 0;
 }

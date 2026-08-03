@@ -3,12 +3,36 @@ import { and, eq, sql } from "drizzle-orm";
 import { type Database } from "./db/client";
 import { generationUsage } from "./db/schema";
 
-/** Per-user daily generation quota and minimum spacing between requests. */
-export const GENERATION_QUOTA = {
-  perDay: 50,
+export interface GenerationQuotaLimits {
+  readonly perDay: number;
   /** Minimum milliseconds between two generations by the same user. */
-  minIntervalMs: 3_000,
-} as const;
+  readonly minIntervalMs: number;
+}
+
+const DEFAULT_QUOTA: GenerationQuotaLimits = { perDay: 50, minIntervalMs: 3_000 };
+
+function positiveInt(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * Per-user daily quota and minimum spacing between requests.
+ *
+ * Read from the environment on each call so the deployment overrides actually
+ * take effect. `validateGeneration` has always checked these variables at boot,
+ * but nothing consumed them — the limits were pinned to the defaults however
+ * the deployment was configured.
+ */
+export function generationQuota(env: NodeJS.ProcessEnv = process.env): GenerationQuotaLimits {
+  const perMinute = positiveInt(env.AXON_GENERATION_PER_MINUTE_LIMIT);
+  return {
+    perDay: positiveInt(env.AXON_GENERATION_DAILY_LIMIT) ?? DEFAULT_QUOTA.perDay,
+    minIntervalMs:
+      perMinute === undefined ? DEFAULT_QUOTA.minIntervalMs : Math.ceil(60_000 / perMinute),
+  };
+}
 
 export interface QuotaStatus {
   readonly used: number;
@@ -43,10 +67,11 @@ export async function getQuotaStatus(
     .where(and(eq(generationUsage.userId, userId), eq(generationUsage.day, day)))
     .limit(1);
   const used = rows[0]?.count ?? 0;
+  const { perDay } = generationQuota();
   return {
     used,
-    limit: GENERATION_QUOTA.perDay,
-    remaining: Math.max(0, GENERATION_QUOTA.perDay - used),
+    limit: perDay,
+    remaining: Math.max(0, perDay - used),
     day,
   };
 }
@@ -62,6 +87,7 @@ export async function consumeGeneration(
   now: Date = new Date(),
 ): Promise<QuotaOutcome> {
   const day = utcDay(now);
+  const { perDay, minIntervalMs } = generationQuota();
   const existing = await db
     .select()
     .from(generationUsage)
@@ -71,23 +97,23 @@ export async function consumeGeneration(
 
   const status: QuotaStatus = {
     used: row?.count ?? 0,
-    limit: GENERATION_QUOTA.perDay,
-    remaining: Math.max(0, GENERATION_QUOTA.perDay - (row?.count ?? 0)),
+    limit: perDay,
+    remaining: Math.max(0, perDay - (row?.count ?? 0)),
     day,
   };
 
-  if ((row?.count ?? 0) >= GENERATION_QUOTA.perDay) {
+  if ((row?.count ?? 0) >= perDay) {
     return { allowed: false, reason: "quota-exceeded", status };
   }
 
   if (row !== undefined) {
     const sinceLast = now.getTime() - row.lastRequestAt.getTime();
-    if (sinceLast < GENERATION_QUOTA.minIntervalMs) {
+    if (sinceLast < minIntervalMs) {
       return {
         allowed: false,
         reason: "rate-limited",
         status,
-        retryAfterMs: GENERATION_QUOTA.minIntervalMs - sinceLast,
+        retryAfterMs: minIntervalMs - sinceLast,
       };
     }
   }
@@ -106,8 +132,8 @@ export async function consumeGeneration(
     allowed: true,
     status: {
       used,
-      limit: GENERATION_QUOTA.perDay,
-      remaining: Math.max(0, GENERATION_QUOTA.perDay - used),
+      limit: perDay,
+      remaining: Math.max(0, perDay - used),
       day,
     },
   };

@@ -4,6 +4,7 @@ import {
   createInvite,
   hasBetaAccess,
   hashInviteToken,
+  isOpenAccessEnabled,
   normalizeInviteCode,
   redeemInvite,
 } from "./beta";
@@ -25,6 +26,34 @@ beforeEach(async () => {
 describe("normalizeInviteCode", () => {
   it("upper-cases and trims", () => {
     expect(normalizeInviteCode("  beta-abc ")).toBe("BETA-ABC");
+  });
+});
+
+describe("open access", () => {
+  it("is enabled only by the exact opt-in value", () => {
+    expect(isOpenAccessEnabled({ AXON_OPEN_ACCESS: "true" } as unknown as NodeJS.ProcessEnv)).toBe(
+      true,
+    );
+    for (const value of ["", "false", "TRUE", "1", "yes", undefined]) {
+      expect(isOpenAccessEnabled({ AXON_OPEN_ACCESS: value } as unknown as NodeJS.ProcessEnv)).toBe(
+        false,
+      );
+    }
+  });
+
+  it("grants access without an invite while enabled, and stops when disabled", async () => {
+    const userId = await seedUser(db, "open@example.com");
+    expect(await hasBetaAccess(db, userId)).toBe(false);
+
+    process.env.AXON_OPEN_ACCESS = "true";
+    try {
+      expect(await hasBetaAccess(db, userId)).toBe(true);
+    } finally {
+      delete process.env.AXON_OPEN_ACCESS;
+    }
+
+    // Turning the flag back off revokes entry — no invite was ever recorded.
+    expect(await hasBetaAccess(db, userId)).toBe(false);
   });
 });
 
